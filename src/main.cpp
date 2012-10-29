@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <time.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <getopt.h>
@@ -21,13 +22,29 @@ static void usage(const char *name)
 	fprintf(stderr,
 "Usage: %s [OPTION]... [<files>]...\n"
 "Display images\n"
-"  -F, --fullscreen   operate in fullscreen mode\n"
-"  -z, --random       randomize files\n"
-"  -s, --sort         sort files\n"
-"  -D, --delay        delay before automatically switching pictures\n"
-"  -v, --version      output version informatin and exit\n"
-"  -h, --help         display this help and exit\n"
-" - imager version " VERSION ", by Courtney Cavin - \n", name);
+"  -F, --fullscreen     operate in fullscreen mode\n"
+"  -z, --random         randomize files\n"
+"  -s, --sort           sort files\n"
+"  -r, --recurse        recurse directories\n"
+"  -f, --filelist <lst> read file names from list (one file per line)\n"
+"  -D, --delay          delay before automatically switching pictures\n"
+"  -v, --version        output version information and exit\n"
+"  -h, --help           display this help and exit\n"
+"      in-app key support: \n"
+"          h         -  toggle pause\n"
+"          f         -  toggle fullscreen\n"
+"          alt-enter -  toggle fullscreen\n"
+"          alt-tab   -  exit fullscreen (SDL is broken)\n"
+"          mwheel-up -  prev image\n"
+"          mwheel-dn -  next image\n"
+"          left      -  prev image\n"
+"          right     -  next image\n"
+"          return    -  next image\n"
+"          spacebar  -  next image\n"
+"          esc       -  quit\n"
+"          q         -  quit\n"
+	, name);
+	version(name);
 }
 
 static unsigned int get_ms(void)
@@ -42,6 +59,11 @@ static int addImage(GUI &gui, const char *name, bool recurse)
 	struct stat st;
 	DIR *dir;
 
+	if (!recurse) {
+		gui.addImage(name);
+		return 0;
+	}
+
 	if (stat(name, &st)) {
 		perror(name);
 		return -1;
@@ -50,11 +72,6 @@ static int addImage(GUI &gui, const char *name, bool recurse)
 	if (!S_ISDIR(st.st_mode)) {
 		gui.addImage(name);
 		return 0;
-	}
-
-	if (!recurse) {
-		fprintf(stderr, "%s: Is a directory (forgot -r ?)\n", name);
-		return -1;
 	}
 
 	dir = opendir(name);
@@ -171,6 +188,7 @@ int main(int argc, char **argv)
 	printf("%d images...\n", gui.imageCount());
 
 	if (random) {
+		srand(time(NULL));
 		gui.randomSort();
 	} else if (sort) {
 		gui.logicalSort();
