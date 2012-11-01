@@ -284,6 +284,9 @@ int GRE::pollEvent(GRE::Event &oev)
 	case SDL_VIDEORESIZE:
 		setVideoMode(GRE::Dimensions(ev.resize.w, ev.resize.h), m_fullscreen);
 		return -1;
+	case SDL_VIDEOEXPOSE:
+		render();
+		return -1;
 	default:
 		return -1;
 	}
