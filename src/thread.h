@@ -294,3 +294,8 @@ private:
 	Semaphore *sem;
 	Semaphore *empty;
 };
+
+typedef unsigned long long Timestamp;
+namespace Time {
+	Timestamp MS(void);
+};

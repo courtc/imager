@@ -9,6 +9,7 @@
 #include <getopt.h>
 
 #include "gui.h"
+#include "thread.h"
 
 #define VERSION "0.1"
 
@@ -27,7 +28,8 @@ static void usage(const char *name)
 "  -s, --sort           sort files\n"
 "  -r, --recurse        recurse directories\n"
 "  -f, --filelist <lst> read file names from list (one file per line)\n"
-"  -D, --delay          delay before automatically switching pictures\n"
+"  -D, --delay <time>   delay before automatically switching pictures\n"
+"  -a, --fade  <time>   amount of time to dedicate to fading between pictures\n"
 "  -v, --version        output version information and exit\n"
 "  -h, --help           display this help and exit\n"
 "      in-app key support: \n"
@@ -45,13 +47,6 @@ static void usage(const char *name)
 "          q         -  quit\n"
 	, name);
 	version(name);
-}
-
-static unsigned int get_ms(void)
-{
-	struct timeval tv;
-	gettimeofday(&tv, NULL);
-	return (unsigned int)((tv.tv_sec % 0x3fffff)*1000 + tv.tv_usec/1000);
 }
 
 static int addImage(GUI &gui, const char *name, bool recurse)
@@ -105,9 +100,11 @@ int main(int argc, char **argv)
 	bool random = false;
 	bool sort = false;
 	bool hasDelay = false;
+	bool hasFade  = false;
 	bool paused = false;
 	bool recurse = false;
-	unsigned int delay;
+	Timestamp delay;
+	Timestamp fade;
 	const char *filelist = NULL;
 	int c;
 
@@ -118,12 +115,13 @@ int main(int argc, char **argv)
 			{"random",      0, 0, 'z'},
 			{"sort",        0, 0, 's'},
 			{"delay",       1, 0, 'D'},
+			{"fade",        1, 0, 'a'},
 			{"recurse",     1, 0, 'r'},
 			{"filelist",    1, 0, 'f'},
 			{"version",     0, 0, 'v'},
 			{"help",        0, 0, 'h'},
 		};
-		c = getopt_long(argc,argv, "Fzf:vhD:sr", long_options, &idx);
+		c = getopt_long(argc,argv, "Fzf:vhD:sra:", long_options, &idx);
 		if (c == -1) break;
 
 		switch (c) {
@@ -135,6 +133,12 @@ int main(int argc, char **argv)
 			break;
 		case 's':
 			sort = true;
+			break;
+		case 'a': {
+			hasFade = true;
+			double dfade = strtod(optarg, NULL);
+			fade = (dfade * 1000 + 0.5);
+			}
 			break;
 		case 'D': {
 			hasDelay = true;
@@ -194,9 +198,11 @@ int main(int argc, char **argv)
 		gui.logicalSort();
 	}
 
-	unsigned int lastframetime;
+	if (hasFade && fade != 0) {
+		gui.setFadeDuration(fade);
+	}
 
-	lastframetime = get_ms();
+	Timestamp lastframetime = Time::MS();
 	for (;;) {
 		GRE::Event ev;
 
@@ -205,11 +211,11 @@ int main(int argc, char **argv)
 			case GRE::Event::Quit:
 				return 0;
 			case GRE::Event::Next:
-				lastframetime = get_ms();
+				lastframetime = Time::MS();
 				gui.next();
 				break;
 			case GRE::Event::Prev:
-				lastframetime = get_ms();
+				lastframetime = Time::MS();
 				gui.prev();
 				break;
 			case GRE::Event::HaltToggle:
@@ -223,7 +229,7 @@ int main(int argc, char **argv)
 		}
 
 		if (hasDelay && !paused) {
-			unsigned int now = get_ms();
+			Timestamp now = Time::MS();
 			if ((now - lastframetime) >= delay) {
 				gui.next();
 				lastframetime = now;

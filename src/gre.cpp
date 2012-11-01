@@ -45,7 +45,6 @@ GRE::GRE(const GRE::Dimensions &dims, bool fullscreen)
 {
 	SDL_Init(SDL_INIT_VIDEO);
 	setVideoMode(dims, fullscreen);
-	m_current = NULL;
 }
 
 GRE::~GRE()
@@ -55,7 +54,7 @@ GRE::~GRE()
 
 void GRE::setVideoMode(const GRE::Dimensions &dims, bool fullscreen)
 {
-	if (m_current != NULL && m_fullscreen != fullscreen) {
+	if (m_render.size() != 0 && m_fullscreen != fullscreen) {
 		SDL_Quit();
 		SDL_Init(SDL_INIT_VIDEO);
 	}
@@ -96,9 +95,48 @@ void GRE::unloadTexture(GRE::Texture *texture)
 	delete static_cast<const GLTexture *>(texture);
 }
 
-void GRE::display(const GRE::Texture *texture)
+void GRE::clearTexturePasses(void)
 {
-	m_current = texture;
+	m_render.clear();
+}
+
+void GRE::addTexturePass(const GRE::Texture *texture)
+{
+	m_render.push_back(texture);
+}
+
+void GRE::remTexturePass(const GRE::Texture *texture)
+{
+	m_render.remove(texture);
+}
+
+void GRE::renderTexture(const GRE::Texture *texture)
+{
+	const GLTexture *tex = static_cast<const GLTexture *>(texture);
+	Dimensions image_dims = tex->getDimensions();
+	float screen_r = (float)m_dims.w / m_dims.h;
+	float image_r = (float)image_dims.w / image_dims.h;
+	float x, y, w, h;
+	if (screen_r > image_r) {
+		h = m_dims.h;
+		w = h * image_r;
+	} else {
+		w = m_dims.w;
+		h = w / image_r;
+	}
+	x = ((float)m_dims.w - w) / 2;
+	y = ((float)m_dims.h - h) / 2;
+
+	tex->bind();
+	glBegin(GL_QUADS);
+		glColor4f(1.0f,1.0f,1.0f,tex->getAlpha());
+
+		glTexCoord2d(0.0,0.0); glVertex2f(x+0.0,y+0.0);
+		glTexCoord2d(1.0,0.0); glVertex2f(x+  w,y+0.0);
+		glTexCoord2d(1.0,1.0); glVertex2f(x+  w,y+  h);
+		glTexCoord2d(0.0,1.0); glVertex2f(x+0.0,y+  h);
+
+	glEnd();
 }
 
 void GRE::render(void)
@@ -113,32 +151,13 @@ void GRE::render(void)
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
-	if (m_current != NULL) {
-		const GLTexture *tex = static_cast<const GLTexture *>(m_current);
-		Dimensions image_dims = tex->getDimensions();
-		float screen_r = (float)m_dims.w / m_dims.h;
-		float image_r = (float)image_dims.w / image_dims.h;
-		float x, y, w, h;
-		if (screen_r > image_r) {
-			h = m_dims.h;
-			w = h * image_r;
-		} else {
-			w = m_dims.w;
-			h = w / image_r;
-		}
-		x = ((float)m_dims.w - w) / 2;
-		y = ((float)m_dims.h - h) / 2;
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-		tex->bind();
-		glBegin(GL_QUADS);
-			glColor3f(1.0f,1.0f,1.0f);
+	std::list<const Texture *>::iterator it = m_render.begin();
 
-			glTexCoord2d(0.0,0.0); glVertex2f(x+0.0,y+0.0);
-			glTexCoord2d(1.0,0.0); glVertex2f(x+  w,y+0.0);
-			glTexCoord2d(1.0,1.0); glVertex2f(x+  w,y+  h);
-			glTexCoord2d(0.0,1.0); glVertex2f(x+0.0,y+  h);
-
-		glEnd();
+	for (; it != m_render.end(); ++it) {
+		renderTexture(*it);
 	}
 
 	SDL_GL_SwapBuffers();

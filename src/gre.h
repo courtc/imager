@@ -1,5 +1,7 @@
 #pragma once
 
+#include <list>
+
 class GRE {
 public:
 	struct Event {
@@ -14,7 +16,14 @@ public:
 		Type type;
 	};
 	class Texture {
-	protected: Texture() { };
+	protected:
+		Texture() : m_alpha(1.0f) { };
+		float m_alpha;
+	public:
+		void setAlpha(float v)
+		{ m_alpha = v; }
+		float getAlpha(void) const
+		{ return m_alpha; }
 	};
 
 	struct Dimensions {
@@ -32,14 +41,18 @@ public:
 	Texture *loadTexture(const void *pData, const Dimensions &);
 	void unloadTexture(Texture *texture);
 
-	void display(const Texture *texture);
+	void clearTexturePasses(void);
+	void addTexturePass(const Texture *texture);
+	void remTexturePass(const Texture *texture);
 
 	void render(void);
 
 	int pollEvent(Event &ev);
 private:
+	void renderTexture(const Texture *texture);
+
+	std::list<const Texture *> m_render;
 	Dimensions     m_dims;
-	const Texture *m_current;
 	bool           m_keystate[2][4];
 	bool           m_fullscreen;
 };

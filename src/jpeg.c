@@ -130,6 +130,7 @@ static decjpeg_t *jpeg_decode(void *indata,unsigned int indatasize) {
     }
   }
   free(buffer[0]);
+  jpeg_destroy_decompress(&cinfo);
 
   /* Allocate our surface. */
   ret = (decjpeg_t*)calloc(1,sizeof(decjpeg_t));

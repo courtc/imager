@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "thread.h"
 
@@ -27,7 +28,6 @@ static void *__posal_thread_fn(void *pdata)
 int posal_thread_create(posal_thread_t *thd, void (*fn)(void *), void *data)
 {
 	struct posal_thread *ret;
-	pthread_attr_t attr;
 	int rc;
 
 	if (fn == NULL)
@@ -40,10 +40,7 @@ int posal_thread_create(posal_thread_t *thd, void (*fn)(void *), void *data)
 	ret->params.fn = fn;
 	ret->params.data = data;
 
-	pthread_attr_init(&attr);
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-	rc = pthread_create(&ret->pthread, &attr, __posal_thread_fn, ret);
-	pthread_attr_destroy(&attr);
+	rc = pthread_create(&ret->pthread, NULL, __posal_thread_fn, ret);
 	if (rc) {
 		free(ret);
 		return -rc;
@@ -128,8 +125,8 @@ int posal_sem_timedwait(posal_sem_t sem, unsigned int ms)
 
 	dts.tv_sec = ms / 1000;
 	dts.tv_nsec = (ms % 1000) * 1000000;
-	sts.tv_sec = ts.tv_sec + dts.tv_sec + (dts.tv_nsec + ts.tv_nsec) / 1000000000;
-	sts.tv_nsec = (dts.tv_nsec + ts.tv_nsec) % 1000000000;
+	sts.tv_sec = ts.tv_sec + dts.tv_sec + (dts.tv_nsec + ts.tv_nsec) / 1000000000ll;
+	sts.tv_nsec = (dts.tv_nsec + ts.tv_nsec) % 1000000000ll;
 
 	while ((s = sem_timedwait((sem_t *)sem, &sts)) == -1 && errno == EINTR)
 		continue;
@@ -278,4 +275,11 @@ ScopedMutex::ScopedMutex(Mutex &mutex)
 ScopedMutex::~ScopedMutex()
 {
 	m_mtx.unlock();
+}
+
+Timestamp Time::MS(void)
+{
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return (Timestamp)tv.tv_sec*1000 + tv.tv_usec/1000;
 }

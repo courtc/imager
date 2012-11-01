@@ -58,15 +58,19 @@ ImageManager::ImageManager(GRE &gre)
 {
 	m_texture = NULL;
 	m_current = NULL;
+	m_previous = NULL;
 	m_count  = 0;
 	m_size   = 256;
 	m_images = new String*[256];
 	m_index  = 0;
 	m_loadcount = 0;
+	m_sem.post();
 }
 
 ImageManager::~ImageManager()
 {
+	if (m_previous != NULL)
+		m_gre.unloadTexture(m_previous);
 	if (m_texture != NULL)
 		m_gre.unloadTexture(m_texture);
 
@@ -95,6 +99,7 @@ void ImageManager::logicalSort(void)
 
 void ImageManager::append(const char *image)
 {
+	m_lock.lock();
 	if (m_count == m_size) {
 		String **n = new String*[m_size << 1];
 		for (int i = 0; i < m_count; ++i)
@@ -104,42 +109,36 @@ void ImageManager::append(const char *image)
 		m_size <<= 1;
 	}
 	m_images[m_count++] = new String(image);
+	m_lock.unlock();
+}
+
+GRE::Texture *ImageManager::index(int dir)
+{
+	Image *image = cacheDir(dir);
+	if (image == NULL)
+		return NULL;
+
+	if (m_previous != NULL)
+		m_gre.unloadTexture(m_previous);
+	m_previous = m_texture;
+	m_texture = m_gre.loadTexture(image->getData(), image->getDimensions());
+
+	return m_texture;
 }
 
 GRE::Texture *ImageManager::next(void)
 {
-	Image *image = cacheDir(1);
-
-	if (m_texture != NULL)
-		m_gre.unloadTexture(m_texture);
-	m_texture = m_gre.loadTexture(image->getData(), image->getDimensions());
-
-	return m_texture;
+	return index(1);
 }
 
 GRE::Texture *ImageManager::reload(void)
 {
-	Image *image = cacheDir(0);
-	if (image == NULL)
-		return NULL;
-
-	if (m_texture != NULL)
-		m_gre.unloadTexture(m_texture);
-	m_texture = m_gre.loadTexture(image->getData(), image->getDimensions());
-
-	return m_texture;
+	return index(0);
 }
-
 
 GRE::Texture *ImageManager::prev(void)
 {
-	Image *image = cacheDir(-1);
-
-	if (m_texture != NULL)
-		m_gre.unloadTexture(m_texture);
-	m_texture = m_gre.loadTexture(image->getData(), image->getDimensions());
-
-	return m_texture;
+	return index(-1);
 }
 
 int ImageManager::imageCount(void) const
@@ -155,8 +154,11 @@ int ImageManager::getLoadCount(void) const
 
 void ImageManager::run(void)
 {
-	unsigned int waittime = 0;
+	unsigned int waittime = 10;
 
+	while (m_sem.wait(waittime) != 0);
+
+	waittime = 0;
 	while (m_sem.wait(waittime) != 0) {
 		waittime = 100;
 		m_lock.lock();
@@ -199,6 +201,13 @@ void ImageManager::run(void)
 			m_lock.unlock();
 		}
 	}
+
+	while (m_cache[0].count() > 0)
+		ImageLoader::unloadImage(m_cache[0].popBack());
+	while (m_cache[1].count() > 0)
+		ImageLoader::unloadImage(m_cache[1].popBack());
+	if (m_current != NULL)
+		ImageLoader::unloadImage(m_current);
 }
 
 Image *ImageManager::cacheDir(int dir)

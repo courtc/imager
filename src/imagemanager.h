@@ -33,13 +33,16 @@ public:
 		char *m_text;
 	};
 private:
+	GRE::Texture *index(int dir);
 	void run(void);
+
 	Image *cacheDir(int dir);
 
 	Semaphore      m_sem;
 	Mutex          m_lock;
 	WaitQ<Image *> m_cache[2];
 	GRE::Texture  *m_texture;
+	GRE::Texture  *m_previous;
 	Image         *m_current;
 
 	GRE      &m_gre;
