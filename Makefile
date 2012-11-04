@@ -1,10 +1,12 @@
-CFLAGS := -g -Wall
+CFLAGS := -g -Wall -I.
 CXXFLAGS := $(CFLAGS)
-LDFLAGS := -lGL -lGLEW -lSDL -lpng -ljpeg
+LDFLAGS := -lGL -lpng -ljpeg -lX11
+#LDFLAGS := -lGL -lGLEW -lSDL -lpng -ljpeg
 proj := imager
 
 objs :=  \
-	src/gre.o \
+	zdl/zdl_xlib.o \
+	src/gre_zdl.o \
 	src/gui.o \
 	src/imageloader.o \
 	src/imagemanager.o \

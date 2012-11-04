@@ -55,4 +55,5 @@ private:
 	Dimensions     m_dims;
 	bool           m_keystate[2][4];
 	bool           m_fullscreen;
+	void          *m_priv;
 };
