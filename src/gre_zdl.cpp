@@ -64,6 +64,7 @@ void GRE::setVideoMode(const GRE::Dimensions &dims, bool fullscreen)
 		m_window = static_cast<ZDL::Window *>(m_priv);
 	}
 	m_window->setFullscreen(fullscreen);
+	m_window->showCursor(!fullscreen);
 	m_window->setSize(dims.w, dims.h);
 	m_window->getSize(&m_dims.w, &m_dims.h);
 	m_fullscreen = fullscreen;
