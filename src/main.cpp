@@ -376,6 +376,7 @@ int main(int argc, char **argv)
 	}
 
 	if (offset) {
+		srand(time(NULL));
 		gui.randomOffset();
 	}
 
