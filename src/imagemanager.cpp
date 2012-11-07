@@ -35,10 +35,9 @@ const char *ImageManager::String::getText(void) const
 
 static inline int wrap(int value, int size)
 {
+	value = value % size;
 	if (value < 0)
 		return size + value;
-	if (value >= size)
-		return value - size;
 	return value;
 }
 
@@ -64,7 +63,7 @@ ImageManager::ImageManager(GRE &gre)
 	m_images = new String*[256];
 	m_index  = 0;
 	m_loadcount = 0;
-	m_sem.post();
+	m_started = false;
 }
 
 ImageManager::~ImageManager()
@@ -83,6 +82,14 @@ ImageManager::~ImageManager()
 	delete[] m_images;
 }
 
+void ImageManager::start(void)
+{
+	if (!m_started) {
+		m_started = true;
+		m_sem.post();
+	}
+}
+
 void ImageManager::randomSort(void)
 {
 	m_lock.lock();
@@ -94,6 +101,13 @@ void ImageManager::logicalSort(void)
 {
 	m_lock.lock();
 	qsort(m_images, m_count, sizeof(m_images[0]), xstrverscmp);
+	m_lock.unlock();
+}
+
+void ImageManager::randomOffset(void)
+{
+	m_lock.lock();
+	m_index = wrap(m_index + rand(), m_count);
 	m_lock.unlock();
 }
 
@@ -163,7 +177,7 @@ void ImageManager::run(void)
 		waittime = 100;
 		m_lock.lock();
 		if (m_current == NULL && m_count > 0) {
-			m_current = ImageLoader::loadImage(m_images[0]->getText());
+			m_current = ImageLoader::loadImage(m_images[m_index]->getText());
 			m_loadcount += (m_current != NULL);
 		}
 		m_lock.unlock();

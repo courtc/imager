@@ -34,7 +34,7 @@ private:
 };
 
 GUI::GUI(const GRE::Dimensions &dims, bool fullscreen)
- : m_gre(dims, fullscreen), m_im(m_gre), m_started(false), m_dirty(true)
+ : m_gre(dims, fullscreen), m_im(m_gre), m_first(false), m_started(false), m_dirty(true)
 {
 	m_textures[0] = NULL;
 	m_textures[1] = NULL;
@@ -82,9 +82,15 @@ void GUI::restartAnimation(void)
 	}
 }
 
+void GUI::start(void)
+{
+	m_im.start();
+	m_started = true;
+}
+
 void GUI::next(void)
 {
-	m_started = true;
+	m_first = m_started = true;
 	if (m_textures[1] != NULL)
 		m_gre.remTexturePass(m_textures[1]);
 	m_textures[1] = m_textures[0];
@@ -96,7 +102,7 @@ void GUI::next(void)
 
 void GUI::prev(void)
 {
-	m_started = true;
+	m_first = m_started = true;
 	if (m_textures[1] != NULL)
 		m_gre.remTexturePass(m_textures[1]);
 	m_textures[1] = m_textures[0];
@@ -108,15 +114,18 @@ void GUI::prev(void)
 
 void GUI::render(void)
 {
+	if (!m_started)
+		return;
+
 	m_anim.step();
-	if (m_started == false && m_im.getLoadCount() != 0) {
+	if (m_first == false && m_im.getLoadCount() != 0) {
 		GRE::Texture *tex = m_im.reload();
 		if (tex != 0) {
 			m_textures[1] = NULL;
 			m_textures[0] = tex;
 			m_gre.clearTexturePasses();
 			m_gre.addTexturePass(m_textures[0]);
-			m_started = true;
+			m_first = true;
 			m_dirty = true;
 		}
 	}
@@ -140,6 +149,11 @@ void GUI::randomSort(void)
 void GUI::logicalSort(void)
 {
 	m_im.logicalSort();
+}
+
+void GUI::randomOffset(void)
+{
+	m_im.randomOffset();
 }
 
 void GUI::setFadeDuration(Timestamp ms)

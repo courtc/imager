@@ -12,6 +12,8 @@ public:
 	void setVideoMode(const GRE::Dimensions &dims, bool fullscreen);
 	void addImage(const char *str);
 
+	void start(void);
+
 	void next(void);
 	void prev(void);
 	void render(void);
@@ -19,6 +21,8 @@ public:
 	void setFadeDuration(Timestamp ms);
 	void randomSort(void);
 	void logicalSort(void);
+
+	void randomOffset(void);
 
 	void setDirty(void);
 
@@ -33,6 +37,7 @@ private:
 	ImageManager  m_im;
 	Animator      m_anim;
 	Animation    *m_animation;
+	bool          m_first;
 	bool          m_started;
 	bool          m_dirty;
 	GRE::Texture *m_textures[2];

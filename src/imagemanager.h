@@ -9,6 +9,8 @@ public:
 	ImageManager(GRE &gre);
 	~ImageManager();
 
+	void start(void);
+	void randomOffset(void);
 	void randomSort(void);
 	void logicalSort(void);
 	void append(const char *image);
@@ -52,4 +54,5 @@ private:
 	int       m_index;
 	Thread    m_thread;
 	int       m_loadcount;
+	bool      m_started;
 };

@@ -270,6 +270,7 @@ int main(int argc, char **argv)
 	bool hasFade  = false;
 	bool paused = false;
 	bool recurse = false;
+	int offset = 0;
 	Timestamp delay;
 	Timestamp fade;
 	CLI cli;
@@ -285,12 +286,13 @@ int main(int argc, char **argv)
 			{"delay",       1, 0, 'D'},
 			{"fade",        1, 0, 'a'},
 			{"recurse",     0, 0, 'r'},
+			{"offset",      0, 0, 'o'},
 			{"stdin",       0, 0, 'S'},
 			{"filelist",    1, 0, 'f'},
 			{"version",     0, 0, 'v'},
 			{"help",        0, 0, 'h'},
 		};
-		c = getopt_long(argc,argv, "Fzf:vhD:sra:S", long_options, &idx);
+		c = getopt_long(argc,argv, "Fzf:vhD:sora:S", long_options, &idx);
 		if (c == -1) break;
 
 		switch (c) {
@@ -305,6 +307,9 @@ int main(int argc, char **argv)
 			break;
 		case 'S':
 			cli.enable();
+			break;
+		case 'o':
+			offset = 1;
 			break;
 		case 'a': {
 			hasFade = true;
@@ -370,9 +375,15 @@ int main(int argc, char **argv)
 		gui.logicalSort();
 	}
 
+	if (offset) {
+		gui.randomOffset();
+	}
+
 	if (hasFade && fade != 0) {
 		gui.setFadeDuration(fade);
 	}
+
+	gui.start();
 
 	Timestamp lastframetime = Time::MS();
 	for (;;) {
