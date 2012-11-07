@@ -56,14 +56,16 @@ GRE::~GRE()
 
 void GRE::setVideoMode(const GRE::Dimensions &dims, bool fullscreen)
 {
+	zdl_flags_t flags = fullscreen ? ZDL_FLAG_FULLSCREEN : 0;
 	ZDL::Window *m_window;
+
 	if (m_priv == NULL) {
-		m_window = new ZDL::Window(dims.w, dims.h, fullscreen);
+		m_window = new ZDL::Window(dims.w, dims.h, flags);
 		m_priv = m_window;
 	} else {
 		m_window = static_cast<ZDL::Window *>(m_priv);
 	}
-	m_window->setFullscreen(fullscreen);
+	m_window->setFlags(flags);
 	m_window->showCursor(!fullscreen);
 	m_window->setSize(dims.w, dims.h);
 	m_window->getSize(&m_dims.w, &m_dims.h);
