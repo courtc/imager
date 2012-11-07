@@ -7,6 +7,8 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <getopt.h>
+#include <termios.h>
+#include <poll.h>
 
 #include "gui.h"
 #include "thread.h"
@@ -48,6 +50,171 @@ static void usage(const char *name)
 	, name);
 	version(name);
 }
+
+struct CharBuffer {
+public:
+	CharBuffer() : read(0),write(0) { }
+	void push(char ch)
+	{
+		buf[write++] = ch;
+		count++;
+	}
+
+	char *peek(void)
+	{
+		return &buf[read];
+	}
+	char pop(void)
+	{
+		count--;
+		return buf[read++];
+	}
+
+	int size(void) const
+	{ return count; }
+
+private:
+	int count;
+	char buf[256];
+	int read;
+	int write;
+
+};
+
+struct TTY {
+public:
+	TTY(void)
+	{
+
+		struct termios nsettings;
+		tcgetattr(0, &_settings);
+		memcpy(&nsettings, &_settings, sizeof(struct termios));
+		nsettings.c_lflag &= ~(ICANON | ECHO | ISIG);
+		nsettings.c_iflag &= ~(ISTRIP | IGNCR | ICRNL | INLCR | IXOFF | IXON);
+		nsettings.c_cc[VTIME] = 0;
+		tcgetattr(0, &_settings);
+		nsettings.c_cc[VMIN] = 1;
+		tcsetattr(0, TCSANOW, &nsettings);
+	}
+
+	~TTY()
+	{
+		tcsetattr(0, TCSANOW, &_settings);
+	}
+
+private:
+	struct termios _settings;
+};
+
+class CLI {
+public:
+	CLI() : m_tty(NULL), m_buffer(NULL), m_enabled(false) { }
+	~CLI()
+	{
+		if (m_tty != NULL) delete m_tty;
+		if (m_buffer != NULL) delete m_buffer;
+	}
+
+	void enable(void)
+	{
+		if (m_enabled) return;
+		m_enabled = true;
+		m_tty = new TTY;
+		m_buffer = new CharBuffer;
+	}
+
+	int pollEvent(GRE::Event &ev);
+
+private:
+	TTY *m_tty;
+	CharBuffer *m_buffer;
+	bool m_enabled;
+};
+
+
+int CLI::pollEvent(GRE::Event &ev)
+{
+	struct pollfd fd;
+	bool food = false;
+	char ch;
+	int idx;
+	int r;
+
+	if (!m_enabled)
+		return -1;
+
+	idx = 0;
+	do {
+		fd.fd = STDIN_FILENO;
+		fd.events = POLLIN | POLLRDHUP;
+		fd.revents = 0;
+
+		r = poll(&fd, 1, 0);
+		if (r < 0) {
+			m_enabled = false;
+			return -1;
+		} else if (r == 0) {
+			break;
+		}
+
+		if (fd.revents & POLLRDHUP) {
+			m_enabled = false;
+			return -1;
+		} else {
+			r = read(STDIN_FILENO, &ch, 1);
+			if (r == 1) {
+				m_buffer->push(ch);
+			} else {
+				m_enabled = false;
+				return -1;
+			}
+		}
+	} while (r > 0);
+
+	while (m_buffer->size()) {
+		food = true;
+		switch ((ch = m_buffer->pop())) {
+		case 0xd:
+		case 0x20:
+			ev.type = GRE::Event::Next;
+			break;
+		case 'q':
+			ev.type = GRE::Event::Quit;
+			break;
+		case 'h':
+			ev.type = GRE::Event::HaltToggle;
+			break;
+		case 'f':
+			ev.type = GRE::Event::FullscreenToggle;
+			break;
+		case 0x1b:
+			if (m_buffer->size() < 2) {
+				ev.type = GRE::Event::Quit;
+				break;
+			}
+			if (!memcmp(m_buffer->peek(), "[C", 2)) {
+				ev.type = GRE::Event::Next;
+				m_buffer->pop(), m_buffer->pop();
+				break;
+			}
+			if (!memcmp(m_buffer->peek(), "[D", 2)) {
+				ev.type = GRE::Event::Prev;
+				m_buffer->pop(), m_buffer->pop();
+				break;
+			}
+			food = false;
+			break;
+		default:
+			food = false;
+			break;
+		}
+		if (food)
+			break;
+	}
+
+	return -(food == false);
+}
+
 
 static int addImage(GUI &gui, const char *name, bool recurse)
 {
@@ -105,6 +272,7 @@ int main(int argc, char **argv)
 	bool recurse = false;
 	Timestamp delay;
 	Timestamp fade;
+	CLI cli;
 	const char *filelist = NULL;
 	int c;
 
@@ -116,12 +284,13 @@ int main(int argc, char **argv)
 			{"sort",        0, 0, 's'},
 			{"delay",       1, 0, 'D'},
 			{"fade",        1, 0, 'a'},
-			{"recurse",     1, 0, 'r'},
+			{"recurse",     0, 0, 'r'},
+			{"stdin",       0, 0, 'S'},
 			{"filelist",    1, 0, 'f'},
 			{"version",     0, 0, 'v'},
 			{"help",        0, 0, 'h'},
 		};
-		c = getopt_long(argc,argv, "Fzf:vhD:sra:", long_options, &idx);
+		c = getopt_long(argc,argv, "Fzf:vhD:sra:S", long_options, &idx);
 		if (c == -1) break;
 
 		switch (c) {
@@ -133,6 +302,9 @@ int main(int argc, char **argv)
 			break;
 		case 's':
 			sort = true;
+			break;
+		case 'S':
+			cli.enable();
 			break;
 		case 'a': {
 			hasFade = true;
@@ -206,7 +378,7 @@ int main(int argc, char **argv)
 	for (;;) {
 		GRE::Event ev;
 
-		while (gui.pollEvent(ev) == 0) {
+		while (gui.pollEvent(ev) == 0 || cli.pollEvent(ev) == 0) {
 			switch (ev.type) {
 			case GRE::Event::Quit:
 				return 0;
