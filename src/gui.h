@@ -21,6 +21,7 @@ public:
 	void setFadeDuration(Timestamp ms);
 	void randomSort(void);
 	void logicalSort(void);
+	void directorySort(void);
 
 	void randomOffset(void);
 

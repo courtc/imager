@@ -51,6 +51,33 @@ static int xstrverscmp(const void *p1, const void *p2)
 	return strverscmp((*(const ImageManager::String **)p1)->getText(),
 			  (*(const ImageManager::String **)p2)->getText());
 }
+static int xstrversdircmp(const void *p1, const void *p2)
+{
+	const char *l = (*(const ImageManager::String **)p1)->getText();
+	const char *r = (*(const ImageManager::String **)p2)->getText();
+	const char *le = strrchr(l, '/');
+	const char *re = strrchr(r, '/');
+	int rc;
+
+	if (le == NULL || re == NULL) {
+		if (le == re) {
+			return strverscmp(l, r);
+		} else if (le) {
+			return 1;
+		} else {
+			return -1;
+		}
+	}
+
+	*(char *)le = *(char *)re = 0;
+	rc = strverscmp(l, r);
+	*(char *)le = *(char *)re = '/';
+	if (rc)
+		return rc;
+
+	return strverscmp(le + 1, re + 1);
+}
+
 
 ImageManager::ImageManager(GRE &gre)
  : m_sem(0), m_gre(gre), m_thread(*this)
@@ -101,6 +128,13 @@ void ImageManager::logicalSort(void)
 {
 	m_lock.lock();
 	qsort(m_images, m_count, sizeof(m_images[0]), xstrverscmp);
+	m_lock.unlock();
+}
+
+void ImageManager::directorySort(void)
+{
+	m_lock.lock();
+	qsort(m_images, m_count, sizeof(m_images[0]), xstrversdircmp);
 	m_lock.unlock();
 }
 

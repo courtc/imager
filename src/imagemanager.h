@@ -13,6 +13,7 @@ public:
 	void randomOffset(void);
 	void randomSort(void);
 	void logicalSort(void);
+	void directorySort(void);
 	void append(const char *image);
 	int imageCount(void) const;
 

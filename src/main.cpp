@@ -266,6 +266,7 @@ int main(int argc, char **argv)
 	bool fullscreen = false;
 	bool random = false;
 	bool sort = false;
+	bool sortdir = false;
 	bool hasDelay = false;
 	bool hasFade  = false;
 	bool paused = false;
@@ -283,6 +284,7 @@ int main(int argc, char **argv)
 			{"fullscreen",  0, 0, 'F'},
 			{"random",      0, 0, 'z'},
 			{"sort",        0, 0, 's'},
+			{"randir",      0, 0, 'd'},
 			{"delay",       1, 0, 'D'},
 			{"fade",        1, 0, 'a'},
 			{"recurse",     0, 0, 'r'},
@@ -292,7 +294,7 @@ int main(int argc, char **argv)
 			{"version",     0, 0, 'v'},
 			{"help",        0, 0, 'h'},
 		};
-		c = getopt_long(argc,argv, "Fzf:vhD:sora:S", long_options, &idx);
+		c = getopt_long(argc,argv, "Fzf:vhD:sora:dS", long_options, &idx);
 		if (c == -1) break;
 
 		switch (c) {
@@ -304,6 +306,9 @@ int main(int argc, char **argv)
 			break;
 		case 's':
 			sort = true;
+			break;
+		case 'd':
+			sortdir = true;
 			break;
 		case 'S':
 			cli.enable();
@@ -373,6 +378,9 @@ int main(int argc, char **argv)
 		gui.randomSort();
 	} else if (sort) {
 		gui.logicalSort();
+	} else if (sortdir) {
+		srand(time(NULL));
+		gui.directorySort();
 	}
 
 	if (offset) {

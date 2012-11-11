@@ -151,6 +151,11 @@ void GUI::logicalSort(void)
 	m_im.logicalSort();
 }
 
+void GUI::directorySort(void)
+{
+	m_im.directorySort();
+}
+
 void GUI::randomOffset(void)
 {
 	m_im.randomOffset();
