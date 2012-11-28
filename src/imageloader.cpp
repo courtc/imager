@@ -62,15 +62,15 @@ Image *ImageLoader::loadImage(const char *path)
 	char mimetype[128];
 	Image *pImage;
 
-	if (mime_file(path, mimetype, sizeof(mimetype)))
-		return NULL;
-
-	if (!strcmp(mimetype, "image/png"))
+	if (!mime_file(path, mimetype, sizeof(mimetype))) {
+		if (!strcmp(mimetype, "image/png"))
+			;
+		else if (!strcmp(mimetype, "image/jpeg"))
+			;
+		else
+			return NULL;
+	} else if (!strncmp(path, "http://", 7))
 		;
-	else if (!strcmp(mimetype, "image/jpeg"))
-		;
-	else
-		return NULL;
 
 	MemoryMapper::Map *map = MemoryMapper::map(path);
 	if (map == NULL)

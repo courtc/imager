@@ -12,6 +12,9 @@ objs :=  \
 	src/imagemanager.o \
 	src/memorymapper_posix.o \
 	src/thread.o \
+	src/simpletcp.o \
+	src/httpstrm.o \
+	src/ringbuffer.o \
 	src/jpeg.o \
 	src/main.o \
 	src/mime.o \

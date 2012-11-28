@@ -7,6 +7,7 @@ public:
 		Map(void *data, int length)
 		 : m_data(data), m_length(length)
 		{ }
+		virtual ~Map() { };
 
 		void *getData(void)
 		{
