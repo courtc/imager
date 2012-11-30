@@ -170,20 +170,19 @@ int     stcp_read(stcp_t *s,int n,void *p)
 	return recv(s->fd, p, n, 0);
 }
 
-int     stcp_peek(stcp_t *s, int n, void *p)
+int     stcp_wait(stcp_t *s, int ms)
 {
+	struct timeval tv;
 	fd_set fds;
-	struct timeval timeout;
 	int rc;
 
 	FD_ZERO(&fds);
 	FD_SET(s->fd, &fds);
-	timeout.tv_sec = 0;
-	timeout.tv_usec = 0;
-	rc = select(s->fd + 1, &fds, NULL, NULL, &timeout);
-
-	if( rc > 0 )
-		return recv(s->fd, (char *)p, n, MSG_PEEK);
+	tv.tv_sec = ms / 1000;
+	tv.tv_usec = (ms % 1000) * 1000;
+	rc = select(s->fd + 1, &fds, NULL, NULL, &tv);
+	if (rc > 0)
+		return 0;
 
 	return -1;
 }

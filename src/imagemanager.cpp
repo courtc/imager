@@ -263,6 +263,8 @@ Image *ImageManager::cacheDir(int dir)
 	Image *ret;
 	int idx = (dir + 1) >> 1;
 
+	if (m_count == 0)
+		return NULL;
 	if (dir == 0)
 		return m_current;
 

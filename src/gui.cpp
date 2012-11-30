@@ -56,8 +56,10 @@ void GUI::setVideoMode(const GRE::Dimensions &dims, bool fullscreen)
 	m_textures[1] = NULL;
 	m_textures[0] = m_im.reload();
 	m_gre.clearTexturePasses();
-	m_gre.addTexturePass(m_textures[0]);
-	m_dirty = true;
+	if (m_textures[0] != NULL) {
+		m_gre.addTexturePass(m_textures[0]);
+		m_dirty = true;
+	}
 }
 
 void GUI::addImage(const char *str)
@@ -90,26 +92,30 @@ void GUI::start(void)
 
 void GUI::next(void)
 {
-	m_first = m_started = true;
 	if (m_textures[1] != NULL)
 		m_gre.remTexturePass(m_textures[1]);
 	m_textures[1] = m_textures[0];
 	m_textures[0] = m_im.next();
-	restartAnimation();
-	m_gre.addTexturePass(m_textures[0]);
-	m_dirty = true;
+	if (m_textures[0] != NULL) {
+		restartAnimation();
+		m_gre.addTexturePass(m_textures[0]);
+		m_dirty = true;
+		m_first = m_started = true;
+	}
 }
 
 void GUI::prev(void)
 {
-	m_first = m_started = true;
 	if (m_textures[1] != NULL)
 		m_gre.remTexturePass(m_textures[1]);
 	m_textures[1] = m_textures[0];
 	m_textures[0] = m_im.prev();
-	restartAnimation();
-	m_gre.addTexturePass(m_textures[0]);
-	m_dirty = true;
+	if (m_textures[0] != NULL) {
+		restartAnimation();
+		m_gre.addTexturePass(m_textures[0]);
+		m_dirty = true;
+		m_first = m_started = true;
+	}
 }
 
 void GUI::render(void)
@@ -124,9 +130,11 @@ void GUI::render(void)
 			m_textures[1] = NULL;
 			m_textures[0] = tex;
 			m_gre.clearTexturePasses();
-			m_gre.addTexturePass(m_textures[0]);
-			m_first = true;
-			m_dirty = true;
+			if (m_textures[0] != NULL) {
+				m_gre.addTexturePass(m_textures[0]);
+				m_first = true;
+				m_dirty = true;
+			}
 		}
 	}
 

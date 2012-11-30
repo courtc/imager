@@ -12,6 +12,9 @@
 
 #include "gui.h"
 #include "thread.h"
+extern "C" {
+#include "server.h"
+}
 
 #define VERSION "0.1"
 
@@ -261,6 +264,58 @@ static int addImage(GUI &gui, const char *name, bool recurse)
 	return 0;
 }
 
+class Server : public Runnable
+{
+public:
+	Server(int port, GUI &gui)
+	: m_gui(gui), m_port(port), m_semaphore(0)
+	{
+		m_thread = new Thread(*this);
+	}
+
+	~Server()
+	{
+		m_semaphore.post();
+		m_thread->join();
+
+		delete m_thread;
+	}
+
+
+	void run(void)
+	{
+		server_t *server;
+		char line[4096];
+		int n_wait = 0;
+
+		server = server_create(m_port);
+
+		while (m_semaphore.wait(n_wait) != 0) {
+			if (server_readline(server, line, sizeof(line)) == 0) {
+				int len;
+
+				len = strcspn(line, "\n\r");
+				if (len == 0)
+					continue;
+				line[len] = 0;
+				addImage(m_gui, line, false);
+				n_wait = 0;
+			} else {
+				n_wait = 10;
+			}
+		}
+		server_destroy(server);
+	}
+
+
+
+private:
+	GUI &m_gui;
+	int m_port;
+	Semaphore m_semaphore;
+	Thread *m_thread;
+};
+
 int main(int argc, char **argv)
 {
 	bool fullscreen = false;
@@ -271,7 +326,9 @@ int main(int argc, char **argv)
 	bool hasFade  = false;
 	bool paused = false;
 	bool recurse = false;
+	int listenport = -1;
 	int offset = 0;
+	Server *server = NULL;
 	Timestamp delay;
 	Timestamp fade;
 	CLI cli;
@@ -287,6 +344,7 @@ int main(int argc, char **argv)
 			{"randir",      0, 0, 'd'},
 			{"delay",       1, 0, 'D'},
 			{"fade",        1, 0, 'a'},
+			{"listen",      1, 0, 'l'},
 			{"recurse",     0, 0, 'r'},
 			{"offset",      0, 0, 'o'},
 			{"stdin",       0, 0, 'S'},
@@ -294,7 +352,7 @@ int main(int argc, char **argv)
 			{"version",     0, 0, 'v'},
 			{"help",        0, 0, 'h'},
 		};
-		c = getopt_long(argc,argv, "Fzf:vhD:sora:dS", long_options, &idx);
+		c = getopt_long(argc,argv, "Fzf:vhD:sora:dSl:", long_options, &idx);
 		if (c == -1) break;
 
 		switch (c) {
@@ -315,6 +373,9 @@ int main(int argc, char **argv)
 			break;
 		case 'o':
 			offset = 1;
+			break;
+		case 'l':
+			listenport = strtol(optarg, 0, 0);
 			break;
 		case 'a': {
 			hasFade = true;
@@ -348,6 +409,9 @@ int main(int argc, char **argv)
 	}
 
 	GUI gui(GRE::Dimensions(1024, 768), fullscreen);
+
+	if (listenport != -1)
+		server = new Server(listenport, gui);
 
 	if (filelist != NULL) {
 		char line[4096];
@@ -430,6 +494,9 @@ int main(int argc, char **argv)
 		gui.render();
 		usleep(33000);
 	}
+
+	if (server != NULL)
+		delete server;
 
 	return 0;
 }

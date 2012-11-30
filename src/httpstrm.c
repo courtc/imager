@@ -27,20 +27,15 @@
  */
 
 #include <string.h>
-#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 
 #include "ringbuffer.h"
 #include "simpletcp.h"
+#include "sbuffer.h"
 #include "httpstrm.h"
 
 #define LOG printf
-
-typedef struct buffer {
-	stcp_t *sock;
-	ringbuffer_t ring;
-} buffer_t;
 
 struct stream {
 	stcp_t *sock;
@@ -50,98 +45,11 @@ struct stream {
 	char host[256];
 	char get[1024];
 	int port;
-	buffer_t buffer;
+	sbuffer_t *buffer;
 	int live;
 };
 
 #define BUFFER_DEFAULT_SIZE 1024*128
-
-#define MIN(x,y) (((x)<(y))?(x):(y))
-
-static int buffer_create(buffer_t *ret)
-{
-	memset(ret, 0, sizeof(buffer_t));
-	ringbuffer_create(&ret->ring, BUFFER_DEFAULT_SIZE);
-	return 0;
-}
-
-static int buffer_set_socket(buffer_t *buf, stcp_t *sock)
-{
-	ringbuffer_flush(&buf->ring);
-	buf->sock = sock;
-
-	return 0;
-}
-
-static void buffer_destroy(buffer_t *buf)
-{
-	ringbuffer_destroy(&buf->ring);
-}
-
-static int buffer_read(buffer_t *buf, char *to, unsigned int len)
-{
-	unsigned int filled = ringbuffer_full(&buf->ring);
-	unsigned int fin;
-	char tmp[1024];
-
-	if (filled >= len)
-		return ringbuffer_read(&buf->ring, to, len);
-
-	fin = ringbuffer_read(&buf->ring, to, filled);
-	do {
-		unsigned int avail = ringbuffer_empty(&buf->ring);
-		unsigned int toread = MIN(avail, sizeof(tmp));
-		int olen;
-
-		olen = stcp_read(buf->sock, toread, tmp);
-		if (olen < 0)
-			return -1;
-		if (olen == 0)
-			break;
-		ringbuffer_write(&buf->ring, tmp, olen);
-		fin += ringbuffer_read(&buf->ring, to + fin, len - fin);
-	} while (fin < len);
-
-	return fin;
-}
-
-static int buffer_write(buffer_t *buf, const char *from, unsigned int len)
-{
-	return stcp_write(buf->sock, len, (void *)from);
-}
-
-static char *buffer_readline(buffer_t *buf, char *s, unsigned int len)
-{
-	char *p = s;
-	int r;
-	if (len == 0)
-		return NULL;
-	if (len == 1) {
-		*s = 0;
-		return s;
-	}
-	do {
-		r = buffer_read(buf, p, 1);
-		if (r == -1)
-			return NULL;
-		*(p += r) = 0;
-	} while (r > 0 && *(p - r) != '\n' && (p - s) < (int)(len - 1));
-
-	return (p - s) ? s : 0;
-}
-
-static int buffer_printf(buffer_t *buf, const char *fmt, ...)
-{
-	int len;
-	va_list argp;
-	char tmp[2048];
-
-	va_start(argp, fmt);
-	len = vsnprintf(tmp, sizeof(tmp), fmt, argp);
-	va_end(argp);
-
-	return buffer_write(buf, tmp, len);
-}
 
 stream_t *httpstrm_open(const char *uri)
 {
@@ -190,7 +98,7 @@ stream_t *httpstrm_open(const char *uri)
 	if (ret == NULL)
 		return NULL;
 
-	buffer_create(&ret->buffer);
+	ret->buffer = sbuffer_create(BUFFER_DEFAULT_SIZE, 1);
 
 	ret->live = 0;
 	ret->mimetype[0] = 0;
@@ -201,26 +109,26 @@ stream_t *httpstrm_open(const char *uri)
 	ret->port = port;
 
 	for (;;) {
-		LOG("Connecting to %s:%d\n", host, port);
+		//LOG("Connecting to %s:%d\n", host, port);
 		ret->sock = stcp_connect(host, port);
 		if (ret->sock == NULL) {
 			LOG("Connect failed\n");
 			free(ret);
 			return NULL;
 		}
-		LOG("Connected\n");
+		//LOG("Connected\n");
 
-		buffer_set_socket(&ret->buffer, ret->sock);
-		buffer_printf(&ret->buffer, "%s %s HTTP/1.1\r\n", method, get);
-		buffer_printf(&ret->buffer, "Host: %s:%d\r\n", host, port);
-		buffer_printf(&ret->buffer, "User-Agent: none\r\n");
-		buffer_printf(&ret->buffer, "Accept: */*\r\n");
-		buffer_printf(&ret->buffer, "Connection: Close\r\n");
-		buffer_printf(&ret->buffer, "\r\n");
+		sbuffer_set_socket(ret->buffer, ret->sock);
+		sbuffer_printf(ret->buffer, "%s %s HTTP/1.1\r\n", method, get);
+		sbuffer_printf(ret->buffer, "Host: %s:%d\r\n", host, port);
+		sbuffer_printf(ret->buffer, "User-Agent: none\r\n");
+		sbuffer_printf(ret->buffer, "Accept: */*\r\n");
+		sbuffer_printf(ret->buffer, "Connection: Close\r\n");
+		sbuffer_printf(ret->buffer, "\r\n");
 
-		if (buffer_readline(&ret->buffer, header, sizeof(header))) {
-			char *p = strtok(header, "\r\n");
-			if (p != NULL) LOG("* %s\n", p);
+		if (sbuffer_readline(ret->buffer, header, sizeof(header))) {
+			//char *p = strtok(header, "\r\n");
+			//if (p != NULL) LOG("* %s\n", p);
 			if (!strncmp(header, "HTTP/1.1 302", 12) ||
 					!strncmp(header, "HTTP/1.1 301", 12)) {
 					relocated = 1;
@@ -236,7 +144,7 @@ stream_t *httpstrm_open(const char *uri)
 			} else {
 				LOG("Fetch failure: %s\n", header);
 				stcp_close(ret->sock);
-				buffer_destroy(&ret->buffer);
+				sbuffer_destroy(ret->buffer);
 				free(ret);
 				return NULL;
 			}
@@ -250,7 +158,7 @@ stream_t *httpstrm_open(const char *uri)
 	}
 
 	rc = -1;
-	while (buffer_readline(&ret->buffer, header, sizeof(header))) {
+	while (sbuffer_readline(ret->buffer, header, sizeof(header))) {
 		char *p;
 		char *tok;
 		char *name;
@@ -282,13 +190,13 @@ stream_t *httpstrm_open(const char *uri)
 				*p = 0;
 			if ((p = strchr(ret->mimetype, ',')) != NULL)
 				*p = 0;
-			LOG("found content-type: %s\n", ret->mimetype);
+			//LOG("found content-type: %s\n", ret->mimetype);
 		} else if (!strcasecmp("content-length", name)) {
 			ret->end = strtoll(value, 0, 0);
-			LOG("found content-length: %llu\n", ret->end);
+			//LOG("found content-length: %llu\n", ret->end);
 		} else if (relocated && !strcasecmp("location", name)) {
 			stcp_close(ret->sock);
-			buffer_destroy(&ret->buffer);
+			sbuffer_destroy(ret->buffer);
 			free(ret);
 
 			return httpstrm_open(value);
@@ -299,14 +207,14 @@ stream_t *httpstrm_open(const char *uri)
 	ret->sock = NULL;
 	if (rc || relocated) {
 		LOG("Header invalid\n");
-		buffer_destroy(&ret->buffer);
+		sbuffer_destroy(ret->buffer);
 		free(ret);
 		return NULL;
 	}
 
 	rc = httpstrm_seek(ret, 0, SEEK_SET);
 	if (rc) {
-		buffer_destroy(&ret->buffer);
+		sbuffer_destroy(ret->buffer);
 		free(ret);
 		return NULL;
 	}
@@ -318,7 +226,7 @@ void        httpstrm_close(stream_t *v)
 {
 	if (v->sock != NULL)
 		stcp_close(v->sock);
-	buffer_destroy(&v->buffer);
+	sbuffer_destroy(v->buffer);
 	free(v);
 }
 
@@ -329,7 +237,7 @@ int         httpstrm_read(stream_t *v, void *data, unsigned int len)
 	if (v->sock == NULL)
 		return -1;
 
-	rc = buffer_read(&v->buffer, data, len);
+	rc = sbuffer_read(v->buffer, data, len);
 	if (rc > 0)
 		v->pos += rc;
 
@@ -371,7 +279,7 @@ int         httpstrm_seek(stream_t *v, uint64 pos, int whence)
 	if (v->pos == npos && v->sock != NULL)
 		return 0;
 
-	LOG("Seeking to: %llu\n", npos);
+	//LOG("Seeking to: %llu\n", npos);
 	if (v->sock != NULL)
 		stcp_close(v->sock);
 
@@ -381,19 +289,19 @@ int         httpstrm_seek(stream_t *v, uint64 pos, int whence)
 		return -1;
 	}
 
-	buffer_set_socket(&v->buffer, v->sock);
-	buffer_printf(&v->buffer, "GET %s HTTP/1.1\r\n", v->get);
-	buffer_printf(&v->buffer, "Host: %s:%d\r\n", v->host, v->port);
-	buffer_printf(&v->buffer, "User-Agent: none\r\n");
+	sbuffer_set_socket(v->buffer, v->sock);
+	sbuffer_printf(v->buffer, "GET %s HTTP/1.1\r\n", v->get);
+	sbuffer_printf(v->buffer, "Host: %s:%d\r\n", v->host, v->port);
+	sbuffer_printf(v->buffer, "User-Agent: none\r\n");
 	if (npos != 0)
-		buffer_printf(&v->buffer, "Range: bytes=%llu-\r\n", npos);
-	buffer_printf(&v->buffer, "Accept: */*\r\n");
-	buffer_printf(&v->buffer, "Connection: Keep-Alive\r\n");
-	buffer_printf(&v->buffer, "\r\n");
+		sbuffer_printf(v->buffer, "Range: bytes=%llu-\r\n", npos);
+	sbuffer_printf(v->buffer, "Accept: */*\r\n");
+	sbuffer_printf(v->buffer, "Connection: Keep-Alive\r\n");
+	sbuffer_printf(v->buffer, "\r\n");
 
-	if (buffer_readline(&v->buffer, header, sizeof(header))) {
-		char *p = strtok(header, "\r\n");
-		if (p != NULL) LOG("* %s\n", p);
+	if (sbuffer_readline(v->buffer, header, sizeof(header))) {
+		//char *p = strtok(header, "\r\n");
+		//if (p != NULL) LOG("* %s\n", p);
 		if (!strncmp(header, "HTTP/1.1 206 Partial", 20)) {
 		} else if (!strncmp(header, "HTTP/1.1 200 OK", 15)) {
 		} else if (!strncmp(header, "ICY 200 OK", 10)) {
@@ -406,7 +314,7 @@ int         httpstrm_seek(stream_t *v, uint64 pos, int whence)
 	}
 
 	rc = -1;
-	while (buffer_readline(&v->buffer, header, sizeof(header))) {
+	while (sbuffer_readline(v->buffer, header, sizeof(header))) {
 		/* final CRLF */
 		if (header[0] == 0 || header[0] == '\r' || header[0] == '\n') {
 			rc = 0;
