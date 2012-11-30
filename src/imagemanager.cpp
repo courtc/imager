@@ -268,7 +268,9 @@ Image *ImageManager::cacheDir(int dir)
 	if (dir == 0)
 		return m_current;
 
-	ret = m_cache[idx].popFront();
+	ret = m_cache[idx].popFront(0);
+	if (ret == NULL)
+		return NULL;
 
 	m_lock.lock();
 	if (m_current != NULL)

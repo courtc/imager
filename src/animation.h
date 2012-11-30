@@ -23,6 +23,7 @@ public:
 	}
 
 	virtual void update(double value) = 0;
+	virtual bool finished(void) const { return false; }
 
 private:
 	Timestamp m_start;

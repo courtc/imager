@@ -41,6 +41,8 @@ public:
 	Texture *loadTexture(const void *pData, const Dimensions &);
 	void unloadTexture(Texture *texture);
 
+	void setSpinnerAlpha(float val);
+
 	void clearTexturePasses(void);
 	void addTexturePass(const Texture *texture);
 	void remTexturePass(const Texture *texture);
@@ -52,6 +54,7 @@ private:
 	void renderTexture(const Texture *texture);
 
 	std::list<const Texture *> m_render;
+	Texture       *m_spinner;
 	Dimensions     m_dims;
 	bool           m_keystate[2][4];
 	bool           m_fullscreen;

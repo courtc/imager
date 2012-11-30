@@ -14,9 +14,11 @@ public:
 
 	void start(void);
 
-	void next(void);
-	void prev(void);
+	int  next(void);
+	int  prev(void);
 	void render(void);
+
+	void setSpinner(bool enabled);
 
 	void setFadeDuration(Timestamp ms);
 	void randomSort(void);
@@ -38,9 +40,11 @@ private:
 	ImageManager  m_im;
 	Animator      m_anim;
 	Animation    *m_animation;
+	Animation    *m_spinner;
 	bool          m_first;
 	bool          m_started;
 	bool          m_dirty;
+	bool          m_spinning;
 	GRE::Texture *m_textures[2];
 	Timestamp     m_duration;
 };

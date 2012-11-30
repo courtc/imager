@@ -307,8 +307,6 @@ public:
 		server_destroy(server);
 	}
 
-
-
 private:
 	GUI &m_gui;
 	int m_port;
@@ -328,6 +326,7 @@ int main(int argc, char **argv)
 	bool recurse = false;
 	int listenport = -1;
 	int offset = 0;
+	int currentImage = 0;
 	Server *server = NULL;
 	Timestamp delay;
 	Timestamp fade;
@@ -457,6 +456,7 @@ int main(int argc, char **argv)
 	}
 
 	gui.start();
+	gui.setSpinner(false);
 
 	Timestamp lastframetime = Time::MS();
 	for (;;) {
@@ -467,15 +467,14 @@ int main(int argc, char **argv)
 			case GRE::Event::Quit:
 				return 0;
 			case GRE::Event::Next:
-				lastframetime = Time::MS();
-				gui.next();
+				currentImage++;
 				break;
 			case GRE::Event::Prev:
-				lastframetime = Time::MS();
-				gui.prev();
+				currentImage--;
 				break;
 			case GRE::Event::HaltToggle:
 				paused = !paused;
+				currentImage = 0;
 				break;
 			case GRE::Event::FullscreenToggle:
 				fullscreen = !fullscreen;
@@ -487,8 +486,28 @@ int main(int argc, char **argv)
 		if (hasDelay && !paused) {
 			Timestamp now = Time::MS();
 			if ((now - lastframetime) >= delay) {
-				gui.next();
-				lastframetime = now;
+				if (currentImage == 0)
+					currentImage++;
+			}
+		}
+
+		if (currentImage != 0) {
+			int rc;
+			int way = 0;
+
+			if (currentImage > 0) {
+				rc = gui.next();
+				way = 1;
+			} else {
+				rc = gui.prev();
+				way = -1;
+			}
+			if (rc == 0) {
+				gui.setSpinner(false);
+				currentImage += -way;
+				lastframetime = Time::MS();
+			} else {
+				gui.setSpinner(true);
 			}
 		}
 		gui.render();

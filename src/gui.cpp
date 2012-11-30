@@ -1,3 +1,5 @@
+#include <math.h>
+#include <stdio.h>
 #include "gui.h"
 
 class GUIAnimation : public Animation {
@@ -33,12 +35,46 @@ private:
 	GRE::Texture *m_textures[2];
 };
 
+class GUISpinner : public Animation {
+public:
+	GUISpinner(GUI &gui, GRE &gre, bool on)
+	 : Animation(on ? 0.0 : 1.0, on ? 1.0 : 0.0, 250), m_gui(gui),
+	 	m_gre(gre), m_target(on ? 1.0 : 0.0), m_finished(false)
+	{
+	}
+
+	void update(double val)
+	{
+		if (m_finished)
+			return;
+		if (val > 1.0) val = 1.0;
+		if (val < 0.0) val = 0.0;
+		if (fabs(m_target - val) < 0.00001) {
+			m_finished = true;
+			val = m_target;
+		}
+		m_gre.setSpinnerAlpha(val);
+		m_gui.setDirty();
+	}
+
+	bool finished(void) const { return m_finished; }
+
+private:
+	GUI          &m_gui;
+	GRE          &m_gre;
+	bool          m_target;
+	bool          m_finished;
+};
+
+
 GUI::GUI(const GRE::Dimensions &dims, bool fullscreen)
  : m_gre(dims, fullscreen), m_im(m_gre), m_first(false), m_started(false), m_dirty(true)
 {
+	m_spinning = true;
 	m_textures[0] = NULL;
 	m_textures[1] = NULL;
 	m_animation = NULL;
+	m_spinner = NULL;
 	m_duration = 0;
 }
 
@@ -47,6 +83,10 @@ GUI::~GUI()
 	if (m_animation != NULL) {
 		m_anim.remove(m_animation);
 		delete m_animation;
+	}
+	if (m_spinner != NULL) {
+		m_anim.remove(m_spinner);
+		delete m_spinner;
 	}
 }
 
@@ -84,38 +124,55 @@ void GUI::restartAnimation(void)
 	}
 }
 
+void GUI::setSpinner(bool enabled)
+{
+	if (m_spinning == enabled)
+		return;
+
+	if (m_spinner != NULL) {
+		m_anim.remove(m_spinner);
+		delete m_spinner;
+	}
+	m_spinner = new GUISpinner(*this, m_gre, enabled);
+	m_anim.add(m_spinner);
+	m_spinning = enabled;
+	m_dirty = true;
+}
+
 void GUI::start(void)
 {
 	m_im.start();
 	m_started = true;
 }
 
-void GUI::next(void)
+int GUI::next(void)
 {
+	GRE::Texture *tex = m_im.next();
+	if (tex == NULL)
+		return -1;
 	if (m_textures[1] != NULL)
 		m_gre.remTexturePass(m_textures[1]);
 	m_textures[1] = m_textures[0];
-	m_textures[0] = m_im.next();
-	if (m_textures[0] != NULL) {
-		restartAnimation();
-		m_gre.addTexturePass(m_textures[0]);
-		m_dirty = true;
-		m_first = m_started = true;
-	}
+	m_textures[0] = tex;
+	restartAnimation();
+	m_gre.addTexturePass(m_textures[0]);
+	m_dirty = m_first = m_started = true;
+	return 0;
 }
 
-void GUI::prev(void)
+int GUI::prev(void)
 {
+	GRE::Texture *tex = m_im.prev();
+	if (tex == NULL)
+		return -1;
 	if (m_textures[1] != NULL)
 		m_gre.remTexturePass(m_textures[1]);
 	m_textures[1] = m_textures[0];
-	m_textures[0] = m_im.prev();
-	if (m_textures[0] != NULL) {
-		restartAnimation();
-		m_gre.addTexturePass(m_textures[0]);
-		m_dirty = true;
-		m_first = m_started = true;
-	}
+	m_textures[0] = tex;
+	restartAnimation();
+	m_gre.addTexturePass(m_textures[0]);
+	m_dirty = m_first = m_started = true;
+	return 0;
 }
 
 void GUI::render(void)
@@ -138,7 +195,7 @@ void GUI::render(void)
 		}
 	}
 
-	if (m_dirty) {
+	if (m_dirty || m_spinning) {
 		m_gre.render();
 		m_dirty = false;
 	}
