@@ -62,15 +62,25 @@ Image *ImageLoader::loadImage(const char *path)
 	char mimetype[128];
 	Image *pImage;
 
-	if (!mime_file(path, mimetype, sizeof(mimetype))) {
+	std::list<ImageRef *>::iterator it = m_images.begin();
+	for (; it != m_images.end(); ++it) {
+		ImageRef *ref = *it;
+		if (!strcmp(path, ref->path)) {
+			ref->refcount++;
+			return ref->image;
+		}
+	}
+
+	if (!strncmp(path, "http://", 7)) {
+		;
+	} else if (!mime_file(path, mimetype, sizeof(mimetype))) {
 		if (!strcmp(mimetype, "image/png"))
 			;
 		else if (!strcmp(mimetype, "image/jpeg"))
 			;
 		else
 			return NULL;
-	} else if (!strncmp(path, "http://", 7))
-		;
+	}
 
 	MemoryMapper::Map *map = MemoryMapper::map(path);
 	if (map == NULL)
@@ -80,11 +90,29 @@ Image *ImageLoader::loadImage(const char *path)
 
 	MemoryMapper::unmap(map);
 
+	ImageRef *ref = new ImageRef;
+	ref->image = pImage;
+	ref->path = strdup(path);
+	ref->refcount = 1;
+	m_images.push_back(ref);
+
 	return pImage;
 }
 
 void ImageLoader::unloadImage(Image *image)
 {
-	free((void *)image->getData());
-	delete image;
+	std::list<ImageRef *>::iterator it = m_images.begin();
+	for (; it != m_images.end(); ++it) {
+		ImageRef *ref = *it;
+		if (ref->image == image) {
+			if (--ref->refcount == 0) {
+				free((void *)image->getData());
+				delete image;
+				m_images.remove(ref);
+				free(ref->path);
+				delete ref;
+			}
+			break;
+		}
+	}
 }

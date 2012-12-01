@@ -38,7 +38,7 @@ private:
 class GUISpinner : public Animation {
 public:
 	GUISpinner(GUI &gui, GRE &gre, bool on)
-	 : Animation(on ? 0.0 : 1.0, on ? 1.0 : 0.0, 250), m_gui(gui),
+	 : Animation(gre.getSpinnerTexture()->getAlpha(), on ? 1.0 : 0.0, 250), m_gui(gui),
 	 	m_gre(gre), m_target(on ? 1.0 : 0.0), m_finished(false)
 	{
 	}
@@ -53,7 +53,7 @@ public:
 			m_finished = true;
 			val = m_target;
 		}
-		m_gre.setSpinnerAlpha(val);
+		m_gre.getSpinnerTexture()->setAlpha(val);
 		m_gui.setDirty();
 	}
 
@@ -66,9 +66,8 @@ private:
 	bool          m_finished;
 };
 
-
 GUI::GUI(const GRE::Dimensions &dims, bool fullscreen)
- : m_gre(dims, fullscreen), m_im(m_gre), m_first(false), m_started(false), m_dirty(true)
+ : m_gre(dims, fullscreen), m_im(m_gre), m_first(false), m_started(false), m_dirty(true), m_text(false)
 {
 	m_spinning = true;
 	m_textures[0] = NULL;
@@ -76,6 +75,10 @@ GUI::GUI(const GRE::Dimensions &dims, bool fullscreen)
 	m_animation = NULL;
 	m_spinner = NULL;
 	m_duration = 0;
+
+	m_string = new StringDrawable("Loading...", 0xffdddddd, 0x0);
+	m_stringtex = m_gre.loadTexture(m_string->getData(), m_string->getDimensions());
+	m_stringtex->setPosition(GRE::Position(18, 0));
 }
 
 GUI::~GUI()
@@ -88,6 +91,9 @@ GUI::~GUI()
 		m_anim.remove(m_spinner);
 		delete m_spinner;
 	}
+
+	m_gre.unloadTexture(m_stringtex);
+	delete m_string;
 }
 
 void GUI::setVideoMode(const GRE::Dimensions &dims, bool fullscreen)
@@ -102,9 +108,19 @@ void GUI::setVideoMode(const GRE::Dimensions &dims, bool fullscreen)
 	}
 }
 
+
+void GUI::updateText(void)
+{
+	if (!m_started || !m_text)
+		return;
+
+	m_textupdated = true;
+}
+
 void GUI::addImage(const char *str)
 {
 	m_im.append(str);
+	updateText();
 }
 
 void GUI::restartAnimation(void)
@@ -124,7 +140,28 @@ void GUI::restartAnimation(void)
 	}
 }
 
-void GUI::setSpinner(bool enabled)
+void GUI::enableText(bool enabled)
+{
+	if (enabled == m_text)
+		return;
+
+	m_text = enabled;
+	if (m_text) {
+		m_gre.addTextureOverlay(m_stringtex);
+		updateText();
+	} else {
+		m_gre.remTextureOverlay(m_stringtex);
+	}
+	m_dirty = true;
+}
+
+void GUI::enableFiltering(bool enabled)
+{
+	m_gre.enableFiltering(enabled);
+	m_dirty = true;
+}
+
+void GUI::enableSpinner(bool enabled)
 {
 	if (m_spinning == enabled)
 		return;
@@ -143,6 +180,7 @@ void GUI::start(void)
 {
 	m_im.start();
 	m_started = true;
+	updateText();
 }
 
 int GUI::next(void)
@@ -157,6 +195,7 @@ int GUI::next(void)
 	restartAnimation();
 	m_gre.addTexturePass(m_textures[0]);
 	m_dirty = m_first = m_started = true;
+	updateText();
 	return 0;
 }
 
@@ -172,6 +211,7 @@ int GUI::prev(void)
 	restartAnimation();
 	m_gre.addTexturePass(m_textures[0]);
 	m_dirty = m_first = m_started = true;
+	updateText();
 	return 0;
 }
 
@@ -191,8 +231,27 @@ void GUI::render(void)
 				m_gre.addTexturePass(m_textures[0]);
 				m_first = true;
 				m_dirty = true;
+				updateText();
 			}
 		}
+	}
+
+	if (m_textupdated) {
+		char buf[512];
+		char name[512];
+
+		if (m_im.imageCount() == 0) {
+			snprintf(buf, sizeof(buf), "No images loaded...");
+		} else {
+			m_im.currentImageName(name, sizeof(name));
+			snprintf(buf, sizeof(buf), "(%4d/%4d) %s",
+					m_im.currentImage(), m_im.imageCount(),
+					name);
+		}
+		m_string->setText(buf);
+		m_stringtex->update(m_string->getData(), m_string->getDimensions());
+		m_textupdated = false;
+		m_dirty = true;
 	}
 
 	if (m_dirty || m_spinning) {

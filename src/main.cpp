@@ -187,6 +187,9 @@ int CLI::pollEvent(GRE::Event &ev)
 		case 'h':
 			ev.type = GRE::Event::HaltToggle;
 			break;
+		case 'F':
+			ev.type = GRE::Event::FilterToggle;
+			break;
 		case 'f':
 			ev.type = GRE::Event::FullscreenToggle;
 			break;
@@ -324,6 +327,8 @@ int main(int argc, char **argv)
 	bool hasFade  = false;
 	bool paused = false;
 	bool recurse = false;
+	bool filtering = true;
+	bool text = false;
 	int listenport = -1;
 	int offset = 0;
 	int currentImage = 0;
@@ -346,15 +351,19 @@ int main(int argc, char **argv)
 			{"listen",      1, 0, 'l'},
 			{"recurse",     0, 0, 'r'},
 			{"offset",      0, 0, 'o'},
+			{"nofilter",    0, 0, 'n'},
 			{"stdin",       0, 0, 'S'},
 			{"filelist",    1, 0, 'f'},
 			{"version",     0, 0, 'v'},
 			{"help",        0, 0, 'h'},
 		};
-		c = getopt_long(argc,argv, "Fzf:vhD:sora:dSl:", long_options, &idx);
+		c = getopt_long(argc,argv, "FzvhsordSl:f:a:D:", long_options, &idx);
 		if (c == -1) break;
 
 		switch (c) {
+		case 'n':
+			filtering = false;
+			break;
 		case 'F':
 			fullscreen = true;
 			break;
@@ -456,7 +465,9 @@ int main(int argc, char **argv)
 	}
 
 	gui.start();
-	gui.setSpinner(false);
+	gui.enableSpinner(false);
+	gui.enableFiltering(filtering);
+	gui.enableText(text);
 
 	Timestamp lastframetime = Time::MS();
 	for (;;) {
@@ -467,10 +478,18 @@ int main(int argc, char **argv)
 			case GRE::Event::Quit:
 				return 0;
 			case GRE::Event::Next:
+				if (currentImage < 0)
+					currentImage = 0;
 				currentImage++;
 				break;
 			case GRE::Event::Prev:
+				if (currentImage > 0)
+					currentImage = 0;
 				currentImage--;
+				break;
+			case GRE::Event::TextToggle:
+				text = !text;
+				gui.enableText(text);
 				break;
 			case GRE::Event::HaltToggle:
 				paused = !paused;
@@ -479,6 +498,11 @@ int main(int argc, char **argv)
 			case GRE::Event::FullscreenToggle:
 				fullscreen = !fullscreen;
 				gui.setVideoMode(GRE::Dimensions(1024, 768), fullscreen);
+				break;
+			case GRE::Event::FilterToggle:
+				filtering = !filtering;
+				gui.enableFiltering(filtering);
+				printf("filtering: %s\n", filtering ? "on" : "off");
 				break;
 			}
 		}
@@ -503,11 +527,11 @@ int main(int argc, char **argv)
 				way = -1;
 			}
 			if (rc == 0) {
-				gui.setSpinner(false);
+				gui.enableSpinner(false);
 				currentImage += -way;
 				lastframetime = Time::MS();
 			} else {
-				gui.setSpinner(true);
+				gui.enableSpinner(true);
 			}
 		}
 		gui.render();

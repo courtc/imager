@@ -1,6 +1,6 @@
 CFLAGS := -g -Wall -I.
 CXXFLAGS := $(CFLAGS)
-LDFLAGS := -lGL -lpng -ljpeg -lX11
+LDFLAGS := -lGL -lpng -ljpeg -lX11 -lGLEW
 #LDFLAGS := -lGL -lGLEW -lSDL -lpng -ljpeg
 proj := imager
 
@@ -8,6 +8,7 @@ objs :=  \
 	zdl/zdl_xlib.o \
 	src/gre_zdl.o \
 	src/gui.o \
+	src/font.o \
 	src/imageloader.o \
 	src/imagemanager.o \
 	src/memorymapper_posix.o \

@@ -15,7 +15,9 @@ public:
 	void logicalSort(void);
 	void directorySort(void);
 	void append(const char *image);
+	int currentImage(void) const;
 	int imageCount(void) const;
+	void currentImageName(char *buf, int len);
 
 	GRE::Texture *reload(void);
 	GRE::Texture *next(void);
@@ -47,6 +49,7 @@ private:
 	GRE::Texture  *m_texture;
 	GRE::Texture  *m_previous;
 	Image         *m_current;
+	ImageLoader    m_loader;
 
 	GRE      &m_gre;
 	String  **m_images;

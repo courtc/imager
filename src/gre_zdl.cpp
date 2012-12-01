@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <GL/glew.h>
 #include <GL/gl.h>
 #include <stdio.h>
 #include "zdl/zdl.h"
@@ -42,11 +43,7 @@ public:
 	 : m_dims(dims)
 	{
 		glGenTextures(1, &m_tex);
-		bind();
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-				m_dims.w, m_dims.h, 0,
-				GL_RGBA, GL_UNSIGNED_BYTE,
-				(void *)pData);
+		update(pData, dims);
 	}
 
 	void bind(void) const
@@ -57,6 +54,16 @@ public:
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP);
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP);
+	}
+
+	void update(const void *pData, const GRE::Dimensions &dims)
+	{
+		m_dims = dims;
+		bind();
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+				m_dims.w, m_dims.h, 0,
+				GL_RGBA, GL_UNSIGNED_BYTE,
+				(void *)pData);
 	}
 
 	const GRE::Dimensions &getDimensions(void) const
@@ -97,15 +104,8 @@ public:
 		}
 
 		glGenTextures(1, &m_tex);
-		GLASSERT();
-		bind();
-		GLASSERT();
-
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-				m_dims.w, m_dims.h, 0,
-				GL_RGBA, GL_UNSIGNED_BYTE,
-				(void *)m_data);
 		m_rotation = 0.0f;
+		update(m_data, m_dims);
 	}
 
 	float advance(void)
@@ -122,6 +122,14 @@ public:
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP);
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP);
+	}
+	void update(const void *pData, const GRE::Dimensions &dims)
+	{
+		bind();
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+				m_dims.w, m_dims.h, 0,
+				GL_RGBA, GL_UNSIGNED_BYTE,
+				(void *)pData);
 	}
 
 	const GRE::Dimensions &getDimensions(void) const
@@ -141,11 +149,281 @@ private:
 	GLuint m_tex;
 };
 
+const char *bicubic_fragment =
+"uniform sampler2D u_Texture;\n"
+"uniform vec2 u_Scale;\n"
+
+"vec4 cubic(float s)\n"
+"{\n"
+"	vec4 c0 = vec4(-0.5,    0.1666, 0.3333, -0.3333);\n"
+"	vec4 c1 = vec4( 1.0,    0.0,   -0.5,     0.5);\n"
+"	vec4 c2 = vec4( 0.0,    0.0,   -0.5,     0.5);\n"
+"	vec4 c3 = vec4(-0.6666, 0.0,    0.8333,  0.1666);\n"
+"	vec4 t = ((c0 * s + c1) * s + c2) * s + c3;\n"
+"	vec2 a = vec2(1.0 / t.z, 1.0 / t.w);\n"
+"	t.xy = t.xy * a + vec2(1.0 + s, 1.0 - s);\n"
+"	return t;\n"
+"}\n"
+
+"vec4 filter(sampler2D tex, vec2 texsize, vec2 texcoord)\n"
+"{\n"
+"	vec4 off;\n"
+"	vec2 pt = 1.0 / texsize;\n"
+"	vec2 fcoord = fract(texcoord * texsize + vec2(0.5, 0.5));\n"
+"	vec4 cx = cubic(fcoord.x);\n"
+"	vec4 cy = cubic(fcoord.y);\n"
+"	off.xz = cx.xy * vec2(-pt.x, pt.x);\n"
+"	off.yw = cy.xy * vec2(-pt.y, pt.y);\n"
+"	vec4 xy = texture2D(tex, texcoord + off.xy);\n"
+"	vec4 xw = texture2D(tex, texcoord + off.xw);\n"
+"	vec4 zy = texture2D(tex, texcoord + off.zy);\n"
+"	vec4 zw = texture2D(tex, texcoord + off.zw);\n"
+"	return mix(mix(zw, zy, cy.z), mix(xw, xy, cy.z), cx.z);\n"
+"}\n"
+
+"void main()\n"
+"{\n"
+"	vec4 color = filter(u_Texture, u_Scale, gl_TexCoord[0].st);\n"
+"	color.a = gl_Color.a;\n"
+"	gl_FragColor = color;\n"
+"}\n";
+
+const char *bicubic_vertex =
+"void main()\n"
+"{\n"
+"	gl_TexCoord[0] = gl_MultiTexCoord0;\n"
+"	gl_FrontColor = gl_Color;\n"
+"	gl_Position = ftransform();\n"
+"}\n";
+
+#if 1
+#define dbg_uniform(name)
+#else
+#define dbg_uniform(name) \
+	fprintf(stderr, "Uniform \"%s\" not found\n", name)
+#endif
+
+class GLShader {
+public:
+	GLShader();
+	~GLShader();
+
+	void loadVertexText(const char *);
+	void loadFragmentText(const char *);
+	void compile(void);
+	void bind(void);
+
+	void setUniform(const char *name, float);
+	void setUniform(const char *name, float, float);
+	void setUniform(const char *name, float, float, float);
+	void setUniform(const char *name, float, float, float, float);
+	void setUniform(const char *name, float *, int count);
+
+	void setUniform(const char *name, int);
+	void setUniform(const char *name, int, int);
+	void setUniform(const char *name, int, int, int);
+	void setUniform(const char *name, int, int, int, int);
+	void setUniform(const char *name, int *, int count);
+
+
+private:
+	GLuint loadText(const char *, GLuint type);
+
+	GLuint m_program;
+	GLuint m_vertex;
+	GLuint m_fragment;
+};
+
+GLShader::GLShader()
+ : m_program(0), m_vertex(-1), m_fragment(-1)
+{ }
+
+GLShader::~GLShader()
+{
+	if (m_program != 0)
+		glDeleteProgram(m_program);
+	if (m_vertex != (GLuint)-1)
+		glDeleteShader(m_vertex);
+	if (m_fragment != (GLuint)-1)
+		glDeleteShader(m_fragment);
+}
+
+GLuint GLShader::loadText(const char *text, GLuint type)
+{
+	GLuint ret;
+
+	ret = glCreateShader(type);
+
+	glShaderSource(ret, 1, &text, NULL);
+	glCompileShader(ret);
+
+	GLint compiled;
+	// Check the compile status
+	glGetShaderiv(ret, GL_COMPILE_STATUS, &compiled);
+	if (!compiled) {
+		fprintf(stderr, "Failed to compile\n");
+		GLint infoLen = 0;
+		glGetShaderiv(ret, GL_INFO_LOG_LENGTH, &infoLen);
+		if (infoLen > 1) {
+			char* infoLog = (char *)malloc(sizeof(char) * infoLen);
+			glGetShaderInfoLog(ret, infoLen, NULL, infoLog);
+			fprintf(stderr, "Error compiling program:\n%s\n", infoLog);
+			free(infoLog);
+		}
+	}
+
+	return ret;
+}
+
+void GLShader::loadVertexText(const char *txt)
+{
+	m_vertex = loadText(txt, GL_VERTEX_SHADER);
+}
+
+void GLShader::loadFragmentText(const char *txt)
+{
+	m_fragment = loadText(txt, GL_FRAGMENT_SHADER);
+}
+
+void GLShader::compile(void)
+{
+	GLuint ret;
+	GLint  linked;
+
+	if (m_program != 0)
+		return;
+
+	if ((m_vertex == (GLuint)-1) || (m_fragment == (GLuint)-1)) {
+		fprintf(stderr, "Failed to load shaders - "
+				"reverting to defaults\n");
+		m_program = 0;
+		return;
+	}
+
+	ret = glCreateProgram();
+	glAttachShader(ret, m_vertex);
+	glAttachShader(ret, m_fragment);
+
+	glLinkProgram(ret);
+
+	// Check the link status
+	glGetProgramiv(ret, GL_LINK_STATUS, &linked);
+	if (!linked) {
+		fprintf(stderr, "Linking shader failed\n");
+		GLint infoLen = 0;
+		glGetProgramiv(ret, GL_INFO_LOG_LENGTH, &infoLen);
+		if (infoLen > 1) {
+			char* infoLog = (char*) malloc(sizeof(char) * infoLen);
+			glGetProgramInfoLog(ret, infoLen, NULL, infoLog);
+			fprintf(stderr, "Error linking program:\n%s\n", infoLog);
+			free(infoLog);
+		}
+		m_program = 0;
+		glDeleteProgram(ret);
+		return;
+	}
+
+	m_program = ret;
+}
+
+void GLShader::bind(void)
+{
+	glUseProgram(m_program);
+	GLASSERT();
+}
+
+void GLShader::setUniform(const char *name, float a)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform1f(u, a);
+	GLASSERT();
+}
+void GLShader::setUniform(const char *name, float a, float b)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform2f(u, a, b);
+	GLASSERT();
+}
+void GLShader::setUniform(const char *name, float a, float b, float c)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform3f(u, a, b, c);
+	GLASSERT();
+}
+void GLShader::setUniform(const char *name, float a, float b, float c, float d)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform4f(u, a, b, c, d);
+	GLASSERT();
+}
+void GLShader::setUniform(const char *name, float *v, int count)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform1fv(u, count, v);
+	GLASSERT();
+}
+
+void GLShader::setUniform(const char *name, int a)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform1i(u, a);
+	GLASSERT();
+}
+void GLShader::setUniform(const char *name, int a, int b)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform2i(u, a, b);
+	GLASSERT();
+}
+void GLShader::setUniform(const char *name, int a, int b, int c)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform3i(u, a, b, c);
+	GLASSERT();
+}
+void GLShader::setUniform(const char *name, int a, int b, int c, int d)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform4i(u, a, b, c, d);
+	GLASSERT();
+}
+void GLShader::setUniform(const char *name, int *v, int count)
+{
+	GLint u = glGetUniformLocation(m_program, name);
+	if (u == -1)
+		dbg_uniform(name);
+	glUniform1iv(u, count, v);
+	GLASSERT();
+}
+
+static GLShader g_shader;
+
 GRE::GRE(const GRE::Dimensions &dims, bool fullscreen)
- : m_dims(dims), m_fullscreen(fullscreen), m_priv(0)
+ : m_dims(dims), m_fullscreen(fullscreen), m_filtering(true), m_priv(0)
 {
 	setVideoMode(dims, fullscreen);
 	m_spinner = new GLSpinner;
+	g_shader.loadVertexText(bicubic_vertex);
+	g_shader.loadFragmentText(bicubic_fragment);
+	g_shader.compile();
 }
 
 GRE::~GRE()
@@ -173,6 +451,7 @@ void GRE::setVideoMode(const GRE::Dimensions &dims, bool fullscreen)
 	m_window->getSize(&m_dims.w, &m_dims.h);
 	m_fullscreen = fullscreen;
 	m_window->setTitle("imager", "imager");
+	glewInit();
 	glViewport(0, 0, m_dims.w, m_dims.h);
 }
 
@@ -186,9 +465,14 @@ void GRE::unloadTexture(GRE::Texture *texture)
 	delete static_cast<const GLTexture *>(texture);
 }
 
-void GRE::setSpinnerAlpha(float val)
+GRE::Texture *GRE::getSpinnerTexture(void)
 {
-	m_spinner->setAlpha(val);
+	return m_spinner;
+}
+
+void GRE::enableFiltering(bool v)
+{
+	m_filtering = v;
 }
 
 void GRE::clearTexturePasses(void)
@@ -204,6 +488,48 @@ void GRE::addTexturePass(const GRE::Texture *texture)
 void GRE::remTexturePass(const GRE::Texture *texture)
 {
 	m_render.remove(texture);
+}
+
+void GRE::clearTextureOverlays(void)
+{
+	m_overlay.clear();
+}
+
+void GRE::addTextureOverlay(const GRE::Texture *texture)
+{
+	m_overlay.push_back(texture);
+}
+
+void GRE::remTextureOverlay(const GRE::Texture *texture)
+{
+	m_overlay.remove(texture);
+}
+
+static float scale(float rs, float cs)
+{
+	return 2.0f * cs;
+}
+
+void GRE::renderTextureOverlay(const GRE::Texture *overlay)
+{
+	const GLTexture *tex = static_cast<const GLTexture *>(overlay);
+	float x, y, w, h;
+
+	x = tex->getPosition().x;
+	y = tex->getPosition().y;
+	w = tex->getDimensions().w;
+	h = tex->getDimensions().h;
+
+	tex->bind();
+	glBegin(GL_QUADS);
+		glColor4f(1.0f,1.0f,1.0f, tex->getAlpha());
+
+		glTexCoord2d(0.0,0.0); glVertex2f(x+0.0,y+0.0);
+		glTexCoord2d(1.0,0.0); glVertex2f(x+  w,y+0.0);
+		glTexCoord2d(1.0,1.0); glVertex2f(x+  w,y+  h);
+		glTexCoord2d(0.0,1.0); glVertex2f(x+0.0,y+  h);
+
+	glEnd();
 }
 
 void GRE::renderTexture(const GRE::Texture *texture)
@@ -222,6 +548,13 @@ void GRE::renderTexture(const GRE::Texture *texture)
 	}
 	x = ((float)m_dims.w - w) / 2;
 	y = ((float)m_dims.h - h) / 2;
+
+	if (m_filtering) {
+		g_shader.setUniform("u_Texture", 0);
+		g_shader.setUniform("u_Scale",
+			scale(image_dims.w, w),
+			scale(image_dims.h, h));
+	}
 
 	tex->bind();
 	glBegin(GL_QUADS);
@@ -253,13 +586,22 @@ void GRE::render(void)
 
 	std::list<const Texture *>::iterator it = m_render.begin();
 
-	for (; it != m_render.end(); ++it) {
+	if (m_filtering)
+		g_shader.bind();
+	else
+		glUseProgram(0);
+
+	for (; it != m_render.end(); ++it)
 		renderTexture(*it);
-	}
+
+	glUseProgram(0);
+
+	for (it = m_overlay.begin(); it != m_overlay.end(); ++it)
+		renderTextureOverlay(*it);
+
 
 	GLSpinner *spinner = static_cast<GLSpinner *>(m_spinner);
 	float rotation = spinner->advance();
-
 	spinner->bind();
 	glTranslatef(8.0, 8.0, 0.0f);
 	glRotatef(rotation, 0.0f, 0.0f, 1.0f);
@@ -273,7 +615,6 @@ void GRE::render(void)
 		glTexCoord2d(0.0,1.0); glVertex2f(-8.0f, 8.0f);
 
 	glEnd();
-
 
 	m_window->swap();
 }
@@ -324,6 +665,9 @@ int GRE::pollEvent(GRE::Event &oev)
 			case ZDL_KEYSYM_SPACE:
 				oev.type = GRE::Event::Next;
 				break;
+			case ZDL_KEYSYM_D:
+				oev.type = GRE::Event::TextToggle;
+				break;
 			case ZDL_KEYSYM_H:
 				oev.type = GRE::Event::HaltToggle;
 				break;
@@ -331,7 +675,10 @@ int GRE::pollEvent(GRE::Event &oev)
 				oev.type = GRE::Event::Quit;
 				break;
 			case ZDL_KEYSYM_F:
-				oev.type = GRE::Event::FullscreenToggle;
+				if (ev.key.modifiers & ZDL_KEYMOD_SHIFT)
+					oev.type = GRE::Event::FilterToggle;
+				else
+					oev.type = GRE::Event::FullscreenToggle;
 				break;
 			case ZDL_KEYSYM_TAB:
 				if ((ev.key.modifiers & ZDL_KEYMOD_ALT) && m_fullscreen) {

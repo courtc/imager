@@ -3,6 +3,7 @@
 #include "gre.h"
 #include "imagemanager.h"
 #include "animation.h"
+#include "font.h"
 
 class GUI {
 public:
@@ -18,7 +19,9 @@ public:
 	int  prev(void);
 	void render(void);
 
-	void setSpinner(bool enabled);
+	void enableText(bool enabled);
+	void enableSpinner(bool enabled);
+	void enableFiltering(bool enabled);
 
 	void setFadeDuration(Timestamp ms);
 	void randomSort(void);
@@ -35,16 +38,21 @@ public:
 
 private:
 	void restartAnimation(void);
+	void updateText(void);
 
-	GRE           m_gre;
-	ImageManager  m_im;
-	Animator      m_anim;
-	Animation    *m_animation;
-	Animation    *m_spinner;
-	bool          m_first;
-	bool          m_started;
-	bool          m_dirty;
-	bool          m_spinning;
-	GRE::Texture *m_textures[2];
-	Timestamp     m_duration;
+	GRE             m_gre;
+	ImageManager    m_im;
+	Animator        m_anim;
+	Animation      *m_animation;
+	Animation      *m_spinner;
+	bool            m_first;
+	bool            m_started;
+	bool            m_dirty;
+	bool            m_spinning;
+	bool            m_text;
+	bool            m_textupdated;
+	GRE::Texture   *m_textures[2];
+	GRE::Texture   *m_stringtex;
+	StringDrawable *m_string;
+	Timestamp       m_duration;
 };

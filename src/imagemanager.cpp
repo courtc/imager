@@ -189,16 +189,28 @@ GRE::Texture *ImageManager::prev(void)
 	return index(-1);
 }
 
+int ImageManager::currentImage(void) const
+{
+	return m_index + 1;
+}
+
 int ImageManager::imageCount(void) const
 {
 	return m_count;
+}
+
+void ImageManager::currentImageName(char *buf, int len)
+{
+	m_lock.lock();
+	strncpy(buf, m_images[m_index]->getText(), len);
+	buf[len-1]=0;
+	m_lock.unlock();
 }
 
 int ImageManager::getLoadCount(void) const
 {
 	return m_loadcount;
 }
-
 
 void ImageManager::run(void)
 {
@@ -210,28 +222,43 @@ void ImageManager::run(void)
 	while (m_sem.wait(waittime) != 0) {
 		waittime = 100;
 		m_lock.lock();
+		if (m_count == 0) {
+			m_lock.unlock();
+			continue;
+		}
 		if (m_current == NULL && m_count > 0) {
-			m_current = ImageLoader::loadImage(m_images[m_index]->getText());
+			m_current = m_loader.loadImage(m_images[m_index]->getText());
+			waittime = 0;
 			m_loadcount += (m_current != NULL);
 		}
 		m_lock.unlock();
 
 		for (int i = 0; i < 2; ++i) {
 			m_lock.lock();
-			if (m_loadcount == m_count) {
+			if (m_count == 0) {
 				m_lock.unlock();
 				continue;
 			}
 			int n = m_cache[i].count();
 			int s = i == 0 ? -1 : 1;
 			if (n > 2) {
-				ImageLoader::unloadImage(m_cache[i].popBack());
+				m_loader.unloadImage(m_cache[i].popBack());
+				waittime = 0;
 				m_loadcount--;
 			} else if (n < 2) {
+				const char *name;
 				Image *image;
-				int index = wrap(m_index + (n + 1) * s, m_count);
-				//printf("Loading (%d + %d = %d), \"%s\"\n", m_index, (n + 1) * s, index, m_images[index]->getText());
-				image = ImageLoader::loadImage(m_images[index]->getText());
+				int index;
+
+				index = wrap(m_index + (n + 1) * s, m_count);
+				//printf("Loading (%d + %d = %d), \"%s\"...", m_index, (n + 1) * s, index, m_images[index]->getText());
+				//fflush(stdout);
+				name = m_images[index]->getText();
+				m_lock.unlock();
+				image = m_loader.loadImage(name);
+				m_lock.lock();
+				//printf(" done\n");
+				waittime = 0;
 				if (image != NULL) {
 					m_cache[i].pushBack(image);
 					m_loadcount++;
@@ -243,7 +270,6 @@ void ImageManager::run(void)
 						&m_images[index + 1],
 						(m_count - (index + 1)) * sizeof(m_images[0]));
 					m_count--;
-					waittime = 0;
 				}
 			}
 			m_lock.unlock();
@@ -251,11 +277,11 @@ void ImageManager::run(void)
 	}
 
 	while (m_cache[0].count() > 0)
-		ImageLoader::unloadImage(m_cache[0].popBack());
+		m_loader.unloadImage(m_cache[0].popBack());
 	while (m_cache[1].count() > 0)
-		ImageLoader::unloadImage(m_cache[1].popBack());
+		m_loader.unloadImage(m_cache[1].popBack());
 	if (m_current != NULL)
-		ImageLoader::unloadImage(m_current);
+		m_loader.unloadImage(m_current);
 }
 
 Image *ImageManager::cacheDir(int dir)

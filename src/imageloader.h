@@ -1,5 +1,6 @@
 #pragma once
 
+#include <list>
 #include "gre.h"
 
 class Image {
@@ -27,6 +28,13 @@ private:
 
 class ImageLoader {
 public:
-	static Image *loadImage(const char *path);
-	static void unloadImage(Image *);
+	Image *loadImage(const char *path);
+	void unloadImage(Image *);
+private:
+	struct ImageRef {
+		char *path;
+		int refcount;
+		Image *image;
+	};
+	std::list<ImageRef *> m_images;
 };
