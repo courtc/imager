@@ -1,6 +1,6 @@
-CFLAGS := -g -Wall -I.
+CFLAGS := -g -ggdb -Wall -I. -I/usr/include/libdrm
 CXXFLAGS := $(CFLAGS)
-LDFLAGS := -lGL -lpng -ljpeg -lX11 -lGLEW
+LDFLAGS := -lGL -lpng -ljpeg -lX11
 #LDFLAGS := -lGL -lGLEW -lSDL -lpng -ljpeg
 proj := imager
 

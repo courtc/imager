@@ -25,6 +25,16 @@ public:
 	virtual void update(double value) = 0;
 	virtual bool finished(void) const { return false; }
 
+	Timestamp getStart(void) const
+	{
+		return m_start;
+	}
+
+	Timestamp getEnd(void) const
+	{
+		return m_end;
+	}
+
 private:
 	Timestamp m_start;
 	Timestamp m_end;

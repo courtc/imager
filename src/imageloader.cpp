@@ -90,6 +90,9 @@ Image *ImageLoader::loadImage(const char *path)
 
 	MemoryMapper::unmap(map);
 
+	if (pImage == NULL)
+		return NULL;
+
 	ImageRef *ref = new ImageRef;
 	ref->image = pImage;
 	ref->path = strdup(path);

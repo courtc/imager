@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdarg.h>
 #include "gre.h"
 #include "imagemanager.h"
 #include "animation.h"
@@ -18,6 +19,9 @@ public:
 	int  next(void);
 	int  prev(void);
 	void render(void);
+
+	void debugVPrintf(const char *fmt, va_list ap);
+	void debugPrintf(const char *fmt, ...);
 
 	void enableText(bool enabled);
 	void enableSpinner(bool enabled);
@@ -45,14 +49,20 @@ private:
 	Animator        m_anim;
 	Animation      *m_animation;
 	Animation      *m_spinner;
+	Animation      *m_infoanim;
 	bool            m_first;
 	bool            m_started;
 	bool            m_dirty;
 	bool            m_spinning;
 	bool            m_text;
-	bool            m_textupdated;
 	GRE::Texture   *m_textures[2];
+	bool            m_textupdated;
 	GRE::Texture   *m_stringtex;
 	StringDrawable *m_string;
+	bool            m_infoshown;
+	bool            m_infoupdated;
+	char            m_infotext[256];
+	GRE::Texture   *m_infotex;
+	StringDrawable *m_info;
 	Timestamp       m_duration;
 };

@@ -85,7 +85,8 @@ static void ljpg_output_message(j_common_ptr cinfo)
 
 static void ljpg_error_exit(j_common_ptr cinfo)
 {
-  jpeg_destroy(cinfo);
+  cinfo->client_data = NULL;
+  //jpeg_destroy(cinfo);
 }
 
 static decjpeg_t *jpeg_decode(void *indata,unsigned int indatasize) {
@@ -110,6 +111,10 @@ static decjpeg_t *jpeg_decode(void *indata,unsigned int indatasize) {
   cinfo.out_color_space = JCS_RGB;
 
   jpeg_start_decompress(&cinfo);
+  if (cinfo.client_data == NULL) {
+    jpeg_destroy_decompress(&cinfo);
+    return NULL;
+  }
 
   w = cinfo.output_width;
   h = cinfo.output_height;

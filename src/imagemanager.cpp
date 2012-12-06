@@ -51,33 +51,6 @@ static int xstrverscmp(const void *p1, const void *p2)
 	return strverscmp((*(const ImageManager::String **)p1)->getText(),
 			  (*(const ImageManager::String **)p2)->getText());
 }
-static int xstrversdircmp(const void *p1, const void *p2)
-{
-	const char *l = (*(const ImageManager::String **)p1)->getText();
-	const char *r = (*(const ImageManager::String **)p2)->getText();
-	const char *le = strrchr(l, '/');
-	const char *re = strrchr(r, '/');
-	int rc;
-
-	if (le == NULL || re == NULL) {
-		if (le == re) {
-			return strverscmp(l, r);
-		} else if (le) {
-			return 1;
-		} else {
-			return -1;
-		}
-	}
-
-	*(char *)le = *(char *)re = 0;
-	rc = strverscmp(l, r);
-	*(char *)le = *(char *)re = '/';
-	if (rc)
-		return rc;
-
-	return strverscmp(le + 1, re + 1);
-}
-
 
 ImageManager::ImageManager(GRE &gre)
  : m_sem(0), m_gre(gre), m_thread(*this)
@@ -134,7 +107,55 @@ void ImageManager::logicalSort(void)
 void ImageManager::directorySort(void)
 {
 	m_lock.lock();
-	qsort(m_images, m_count, sizeof(m_images[0]), xstrversdircmp);
+	if (m_count <= 1) {
+		m_lock.unlock();
+		return;
+	}
+	struct dirid {
+		int index;
+		int count;
+	} *dirid = new struct dirid[m_count];
+	const char *l, *r, *le, *re;
+	int di = 0;
+	qsort(m_images, m_count, sizeof(m_images[0]), xstrverscmp);
+	l = m_images[0]->getText();
+	le = strrchr(l, '/');
+	dirid[0].index = 0;
+	dirid[0].count = 1;
+	for (int i = 1; i < m_count; ++i) {
+		r = m_images[i]->getText();
+		re = strrchr(r, '/');
+		if (le == NULL || re == NULL) {
+			if (le == re)
+				dirid[di].count++;
+			else {
+				dirid[++di].index = i;
+				dirid[di].count = 1;
+			}
+		} else {
+			if (!strncmp(l, r, le - l))
+				dirid[di].count++;
+			else {
+				dirid[++di].index = i;
+				dirid[di].count = 1;
+			}
+		}
+		le = re;
+		l = r;
+	}
+	if (di++ != 0) {
+		qsort(dirid, di, sizeof(dirid[0]), xstrrandcmp);
+		String **n = new String*[m_size];
+		int idx = 0;
+		for (int i = 0; i < di; ++i) {
+			for (int j = 0; j < dirid[i].count; ++j)
+				n[idx++] = m_images[dirid[i].index + j];
+		}
+		delete[] m_images;
+		m_images = n;
+	}
+
+	delete[] dirid;
 	m_lock.unlock();
 }
 

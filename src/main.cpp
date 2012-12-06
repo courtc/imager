@@ -502,7 +502,6 @@ int main(int argc, char **argv)
 			case GRE::Event::FilterToggle:
 				filtering = !filtering;
 				gui.enableFiltering(filtering);
-				printf("filtering: %s\n", filtering ? "on" : "off");
 				break;
 			}
 		}

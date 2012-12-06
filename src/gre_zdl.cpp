@@ -1,7 +1,9 @@
 #include <stdlib.h>
-#include <GL/glew.h>
+#define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
+#include <GL/glext.h>
 #include <stdio.h>
+
 #include "zdl/zdl.h"
 
 #include "gre.h"
@@ -451,7 +453,6 @@ void GRE::setVideoMode(const GRE::Dimensions &dims, bool fullscreen)
 	m_window->getSize(&m_dims.w, &m_dims.h);
 	m_fullscreen = fullscreen;
 	m_window->setTitle("imager", "imager");
-	glewInit();
 	glViewport(0, 0, m_dims.w, m_dims.h);
 }
 
@@ -576,11 +577,15 @@ void GRE::render(void)
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho(0.0f,m_dims.w,m_dims.h,0.0f,1.0f,-1.0f);
+	if (m_window->getFlags() & ZDL_FLAG_FLIP_Y)
+		glOrtho(0.0f,m_dims.w,0.0f,m_dims.h,1.0f,-1.0f);
+	else
+		glOrtho(0.0f,m_dims.w,m_dims.h,0.0f,1.0f,-1.0f);
 
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
+	glDisable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
