@@ -143,7 +143,7 @@ stcp_t *stcp_connect(const char *host, int port)
 	rc = setsockopt(ret->fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&yes, sizeof(int));
 	if (rc == -1)
 		return NULL;
-#if 0
+#if 1
 	{
 		struct timeval tv;
 		tv.tv_sec = 1;

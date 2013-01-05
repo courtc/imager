@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include "ringbuffer.h"
 #include "sbuffer.h"
@@ -61,10 +62,11 @@ int sbuffer_read(sbuffer_t *buf, char *to, unsigned int len)
 		int olen;
 
 		olen = stcp_read(buf->sock, toread, tmp);
-		if (olen < 0)
+		if (olen <= 0) {
+			if (olen == 0 || errno == EAGAIN)
+				break;
 			return -1;
-		if (olen == 0)
-			break;
+		}
 		ringbuffer_write(&buf->ring, tmp, olen);
 		fin += ringbuffer_read(&buf->ring, to + fin, len - fin);
 	} while (fin < len);
