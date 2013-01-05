@@ -1,6 +1,6 @@
 CFLAGS := -g -Wall -I.
 CXXFLAGS := $(CFLAGS)
-LDFLAGS := -lGL -lpng -ljpeg -lX11
+LDFLAGS := -lGL -lpng -ljpeg -lX11 -pthread
 proj := imager
 
 objs :=  \
