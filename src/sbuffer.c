@@ -46,6 +46,16 @@ void sbuffer_destroy(sbuffer_t *buf)
 	free(buf);
 }
 
+int        sbuffer_wait(sbuffer_t *buf, int ms)
+{
+	unsigned int filled = ringbuffer_full(&buf->ring);
+
+	if (filled > 0)
+		return 0;
+
+	return stcp_wait(buf->sock, ms);
+}
+
 int sbuffer_read(sbuffer_t *buf, char *to, unsigned int len)
 {
 	unsigned int filled = ringbuffer_full(&buf->ring);

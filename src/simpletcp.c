@@ -25,9 +25,11 @@
 #endif
 
 #include "simpletcp.h"
+#include "proxy.h"
 
 struct stcp {
 	int fd;
+	proxy_t *proxy;
 };
 
 stcp_t *stcp_listen(int port)
@@ -113,7 +115,7 @@ int     stcp_accept(stcp_t *s,stcp_t **nsock,int timeout)
 	return 0;
 }
 
-stcp_t *stcp_connect(const char *host, int port)
+stcp_t *stcp_connect_np(const char *host, int port)
 {
 	int rc;
 	struct sockaddr_in addr;
@@ -122,6 +124,8 @@ stcp_t *stcp_connect(const char *host, int port)
 	int yes = 1;
 
 	ret = (stcp_t*)calloc(1,sizeof(stcp_t));
+	if (ret == NULL)
+		return NULL;
 
 	he = gethostbyname(host);
 	if (he == NULL)
@@ -155,42 +159,72 @@ stcp_t *stcp_connect(const char *host, int port)
 	return ret;
 }
 
+stcp_t *stcp_connect(const char *host, int port)
+{
+	stcp_t *ret;
+	proxy_t *proxy;
+
+	proxy = proxy_connect(host, port);
+	if (proxy == NULL)
+		return stcp_connect_np(host, port);
+
+	ret = (stcp_t*)calloc(1,sizeof(stcp_t));
+	if (ret == NULL)
+		return NULL;
+
+	ret->proxy = proxy;
+
+	return ret;
+}
+
 void    stcp_close(stcp_t *s)
 {
+	if (s->proxy == NULL) {
 #ifdef _WIN32
-	closesocket(s->fd);
+		closesocket(s->fd);
 #else
-	close(s->fd);
+		close(s->fd);
 #endif
+	} else {
+		proxy_close(s->proxy);
+	}
+
 	free(s);
 }
 
 int     stcp_read(stcp_t *s,int n,void *p)
 {
-	return recv(s->fd, p, n, 0);
+	if (s->proxy == NULL)
+		return recv(s->fd, p, n, 0);
+	else
+		return proxy_read(s->proxy, n, p);
 }
 
 int     stcp_wait(stcp_t *s, int ms)
 {
-	struct timeval tv;
-	fd_set fds;
-	int rc;
+	if (s->proxy == NULL) {
+		struct timeval tv;
+		fd_set fds;
+		int rc;
 
-	FD_ZERO(&fds);
-	FD_SET(s->fd, &fds);
-	tv.tv_sec = ms / 1000;
-	tv.tv_usec = (ms % 1000) * 1000;
-	rc = select(s->fd + 1, &fds, NULL, NULL, &tv);
-	if (rc > 0)
-		return 0;
+		FD_ZERO(&fds);
+		FD_SET(s->fd, &fds);
+		tv.tv_sec = ms / 1000;
+		tv.tv_usec = (ms % 1000) * 1000;
+		rc = select(s->fd + 1, &fds, NULL, NULL, &tv);
+		if (rc > 0)
+			return 0;
+	} else {
+		return proxy_wait(s->proxy, ms);
+	}
 
 	return -1;
 }
 
-int     stcp_write(stcp_t *s, int n, void *p)
+int     stcp_write(stcp_t *s, int n, const void *p)
 {
-	return send(s->fd, (char *)p, n, 0);
+	if (s->proxy == NULL)
+		return send(s->fd, (const char *)p, n, 0);
+	else
+		return proxy_write(s->proxy, n, p);
 }
-
-
-

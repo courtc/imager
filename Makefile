@@ -13,9 +13,11 @@ objs :=  \
 	src/memorymapper_posix.o \
 	src/thread.o \
 	src/simpletcp.o \
+	src/proxy.o \
 	src/sbuffer.o \
 	src/server.o \
 	src/httpstrm.o \
+	src/httpproxy.o \
 	src/ringbuffer.o \
 	src/jpeg.o \
 	src/main.o \
